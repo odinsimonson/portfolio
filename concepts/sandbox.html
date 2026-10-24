@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sandbox Portfolio</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&family=JetBrains+Mono:wght@400;700&display=swap">
+<style>
+/* Full-screen falling-sand world: name made of sand, projects are throwable crates */
+:root{
+  --sky1:#1d1630; --sky2:#4a2840; --ink:#f6e9d0; --muted:#c3ae90;
+  --card:#f3e6c8; --cardInk:#2a1d18; --edge:#2a1d18; --accent:#f4a261;
+  --display:"Silkscreen", ui-monospace, monospace;
+  --body:"JetBrains Mono", ui-monospace, Menlo, monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%;margin:0}
+body{background:linear-gradient(180deg,var(--sky1),var(--sky2));color:var(--ink);font-family:var(--body);overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none}
+#sand{position:fixed;inset:0;width:100%;height:100%;image-rendering:pixelated;cursor:crosshair}
+.hud{position:fixed;left:0;right:0;top:0;display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;padding:14px max(16px,env(safe-area-inset-right)) 0 max(16px,env(safe-area-inset-left));z-index:5;pointer-events:none}
+.who{font-family:var(--display);font-size:13px;letter-spacing:.14em;color:var(--muted);line-height:1.6}
+.who b{color:var(--ink);font-weight:700}
+.btns{display:flex;gap:8px;flex-wrap:wrap;pointer-events:auto}
+button{font:700 11px var(--display);letter-spacing:.08em;background:transparent;color:var(--ink);border:2px solid var(--muted);padding:7px 10px;cursor:pointer}
+button:hover,button:focus-visible{background:var(--ink);color:var(--sky1);outline:none}
+.hint{position:fixed;left:50%;bottom:max(14px,env(safe-area-inset-bottom));transform:translateX(-50%);font-size:12px;color:var(--muted);white-space:nowrap;z-index:5;pointer-events:none;opacity:.85}
+.card{position:fixed;left:0;top:0;background:var(--card);color:var(--cardInk);border:3px solid var(--edge);border-top:12px solid var(--c);box-shadow:6px 6px 0 rgba(0,0,0,.35);padding:10px 12px;cursor:grab;z-index:3;will-change:transform;touch-action:none;display:flex;flex-direction:column;justify-content:space-between}
+.card:active{cursor:grabbing}
+.card .ct{font:700 15px/1.15 var(--display);letter-spacing:.02em}
+.card .cm{font-size:11px;opacity:.75;display:flex;justify-content:space-between;gap:8px}
+.modal{position:fixed;inset:0;display:grid;place-items:center;background:rgba(15,10,24,.6);z-index:10;padding:16px}
+.panel{background:var(--card);color:var(--cardInk);border:3px solid var(--edge);border-top:16px solid var(--c);box-shadow:10px 10px 0 rgba(0,0,0,.4);max-width:520px;width:100%;padding:20px 22px;display:grid;gap:12px}
+.panel h2{font:700 26px/1.1 var(--display);margin:0;text-wrap:balance}
+.panel .meta{font-size:12px;opacity:.7}
+.panel .clip{aspect-ratio:16/9;max-width:100%;background:repeating-linear-gradient(45deg,#e6d6b2 0 10px,#ddcba4 10px 20px);border:2px dashed #a8936c;display:grid;place-items:center;font-size:12px;color:#7a6648}
+.panel dl{margin:0;display:grid;gap:8px;font-size:13px;line-height:1.5}
+.panel dt{font:700 11px var(--display);letter-spacing:.1em;color:#8a5a3c}
+.panel dd{margin:0}
+.panel button{color:var(--cardInk);border-color:var(--cardInk);justify-self:start}
+.panel button:hover{background:var(--cardInk);color:var(--card)}
+.boring{position:fixed;inset:0;background:#f7f1e5;color:#222;z-index:20;overflow:auto;padding:32px max(16px,env(safe-area-inset-right)) 32px max(16px,env(safe-area-inset-left));user-select:text;-webkit-user-select:text}
+.boring .wrap{max-width:680px;margin:0 auto;display:grid;gap:22px}
+.boring h1{font:700 28px var(--display);margin:0}
+.boring article{border-top:1px solid #d9cfbd;padding-top:14px;display:grid;gap:4px;font-size:14px;line-height:1.55}
+.boring h3{margin:0;font-size:16px}
+.boring button{color:#222;border-color:#222;justify-self:start}
+.boring button:hover{background:#222;color:#f7f1e5}
+.note{font-size:11px;color:#8a7a62}
+</style>
+</head>
+<body>
+<canvas id="sand"></canvas>
+<div class="hud">
+  <div class="who"><b>Game dev · Simulations</b><br>Odin · Portfolio</div>
+  <div class="btns">
+    <button id="crumble">Crumble name</button>
+    <button id="clear">Clear sand</button>
+    <button id="boringBtn">Boring mode</button>
+  </div>
+</div>
+<div class="hint">drag &amp; throw the crates · hold anywhere to pour sand · brush the name</div>
+<div id="cards"></div>
+<div class="modal" id="modal" hidden><div class="panel" id="panel"></div></div>
+<div class="boring" id="boring" hidden>
+  <div class="wrap">
+    <button id="funBtn">← Back to the sandbox</button>
+    <h1>Odin · Projects</h1>
+    <p class="note">Plain view for quick reading. Project text below is sample copy.</p>
+    <div id="list" style="display:grid;gap:22px"></div>
+  </div>
+</div>
+<script>
+const P=[
+ {name:'Pixel Physics',year:'2025',stack:'JavaScript · Canvas',c:'#e9c46a',pitch:'A falling-sand sandbox where every pixel is a particle with its own rules.',hard:'Keeping tens of thousands of particles moving at 60 fps.',learned:'Cellular automata, update-order bugs, and why typed arrays are fast.'},
+ {name:'Physics Simulation',year:'2025',stack:'JavaScript',c:'#2a9d8f',pitch:'Rigid bodies, springs and collisions written from scratch with no engine.',hard:'Fast objects tunnelling straight through each other.',learned:'Integrators, collision response, and fixed timesteps.'},
+ {name:'Escanor vs Mob',year:'2026',stack:'Unity · C#',c:'#e76f51',pitch:'An arena brawler: one overpowered hero against an endless mob.',hard:'Hundreds of enemies on screen without the frame rate dropping.',learned:'Object pooling, enemy steering and game feel.'},
+ {name:'Redline',year:'2026',stack:'Your stack',c:'#d62828',pitch:'Sample pitch: one line on what Redline is.',hard:'Sample: the hardest problem you hit.',learned:'Sample: what you would tell another student.'},
+ {name:'America Quest',year:'2025',stack:'Your stack',c:'#5b8bd0',pitch:'Sample pitch: one line on what America Quest is.',hard:'Sample: the hardest problem you hit.',learned:'Sample: what you would tell another student.'},
+ {name:'Elden Cube',year:'2026',stack:'Your stack',c:'#9b72cf',pitch:'Sample pitch: one line on what Elden Cube is.',hard:'Sample: the hardest problem you hit.',learned:'Sample: what you would tell another student.'}
+];
+const CELL=4;
+const cv=document.getElementById('sand'), ctx=cv.getContext('2d');
+let W,H,grid,col,mask,img;
+const SAND=[[233,196,106],[244,162,97],[238,180,110],[226,170,90],[250,210,140]];
+const STONE=[[255,236,200],[250,226,186],[246,240,220]];
+function resize(){
+  W=Math.ceil(innerWidth/CELL); H=Math.ceil(innerHeight/CELL);
+  cv.width=W; cv.height=H;
+  grid=new Uint8Array(W*H); col=new Uint8Array(W*H); mask=new Uint8Array(W*H);
+  img=ctx.createImageData(W,H);
+  stampName();
+}
+function stampName(){
+  const o=document.createElement('canvas'); o.width=W; o.height=H;
+  const c=o.getContext('2d');
+  let size=Math.min(H*0.32,W*0.3);
+  c.font=`700 ${size}px Silkscreen, monospace`;
+  const tw=c.measureText('ODIN').width;
+  if(tw>W*0.86){size*=W*0.86/tw; c.font=`700 ${size}px Silkscreen, monospace`;}
+  c.textAlign='center'; c.textBaseline='middle'; c.fillStyle='#fff';
+  c.fillText('ODIN',W/2,H*0.36);
+  const d=c.getImageData(0,0,W,H).data;
+  for(let k=0;k<W*H;k++) if(d[k*4+3]>120){grid[k]=2; col[k]=(Math.random()*STONE.length)|0;}
+}
+// crates
+const holder=document.getElementById('cards');
+const small=()=>innerWidth<640;
+const cards=P.map((p,i)=>{
+  const el=document.createElement('div'); el.className='card'; el.style.setProperty('--c',p.c);
+  el.innerHTML=`<div class="ct">${p.name}</div><div class="cm"><span>${p.stack}</span><span>${p.year}</span></div>`;
+  holder.appendChild(el);
+  return {p,el,x:0,y:0,vx:0,vy:0,w:0,h:0,rot:0,drag:false};
+});
+function layoutCards(){
+  const w=small()?140:190, h=small()?88:112;
+  cards.forEach((c,i)=>{c.w=w;c.h=h;c.el.style.width=w+'px';c.el.style.height=h+'px';
+    c.x=Math.min(innerWidth-w,Math.max(0,(i+.5)/cards.length*innerWidth-w/2+(Math.random()-.5)*40));
+    c.y=-h-i*110-200; c.vx=(Math.random()-.5)*3; c.vy=0;});
+}
+let dragCard=null, downAt=null;
+cards.forEach(c=>{
+  c.el.addEventListener('pointerdown',e=>{
+    e.stopPropagation(); c.el.setPointerCapture(e.pointerId);
+    c.drag=true; dragCard=c; c.ox=e.clientX-c.x; c.oy=e.clientY-c.y; downAt={x:e.clientX,y:e.clientY,moved:0};
+  });
+  c.el.addEventListener('pointermove',e=>{
+    if(!c.drag)return;
+    const nx=e.clientX-c.ox, ny=e.clientY-c.oy;
+    c.vx=nx-c.x; c.vy=ny-c.y; c.x=nx; c.y=ny;
+    downAt.moved+=Math.abs(e.movementX||0)+Math.abs(e.movementY||0);
+    if(Math.hypot(e.clientX-downAt.x,e.clientY-downAt.y)>6)downAt.moved+=6;
+  });
+  const up=()=>{ if(!c.drag)return; c.drag=false; dragCard=null;
+    if(downAt&&downAt.moved<6){c.vx=0;c.vy=0;open(c.p);} downAt=null; };
+  c.el.addEventListener('pointerup',up); c.el.addEventListener('pointercancel',up);
+});
+function physics(){
+  const fw=innerWidth, fh=innerHeight;
+  for(const c of cards){
+    if(!c.drag){ c.vy+=0.6; c.vx*=0.99; c.x+=c.vx; c.y+=c.vy; }
+    if(c.y>fh-c.h){c.y=fh-c.h; c.vy*=-0.3; c.vx*=0.85; if(Math.abs(c.vy)<1.2)c.vy=0;}
+    if(c.x<0){c.x=0;c.vx*=-0.5} if(c.x>fw-c.w){c.x=fw-c.w;c.vx*=-0.5}
+  }
+  for(let it=0;it<3;it++)for(let i=0;i<cards.length;i++)for(let j=i+1;j<cards.length;j++){
+    const a=cards[i],b=cards[j];
+    const ox=Math.min(a.x+a.w,b.x+b.w)-Math.max(a.x,b.x);
+    const oy=Math.min(a.y+a.h,b.y+b.h)-Math.max(a.y,b.y);
+    if(ox<=0||oy<=0)continue;
+    if(ox<oy){const s=a.x<b.x?-1:1;
+      if(!a.drag)a.x+=s*ox/(b.drag?1:2); if(!b.drag)b.x-=s*ox/(a.drag?1:2);
+      const t=a.vx; a.vx=b.vx*.6; b.vx=t*.6;}
+    else{const top=a.y<b.y?a:b, bot=top===a?b:a;
+      if(top.drag){bot.y+=oy;} else {top.y-=oy; if(top.vy>0)top.vy=0; top.vx*=0.9;}}
+  }
+  for(const c of cards){
+    if(c.y>fh-c.h)c.y=fh-c.h;
+    const target=Math.max(-14,Math.min(14,c.vx*1.6));
+    c.rot+=(target-c.rot)*0.2;
+    c.el.style.transform=`translate(${c.x}px,${c.y}px) rotate(${c.rot}deg)`;
+  }
+}
+function rasterCards(){
+  mask.fill(0);
+  for(const c of cards){
+    const x0=Math.max(0,Math.floor(c.x/CELL)), x1=Math.min(W,Math.ceil((c.x+c.w)/CELL));
+    const y0=Math.max(0,Math.floor(c.y/CELL)), y1=Math.min(H,Math.ceil((c.y+c.h)/CELL));
+    for(let y=y0;y<y1;y++)for(let x=x0;x<x1;x++){
+      const k=y*W+x; mask[k]=1;
+      if(grid[k]===1){ // shove grains up out of the crate
+        for(let yy=y0-1;yy>=0;yy--){const kk=yy*W+x; if(!grid[kk]&&!mask[kk]){grid[kk]=1;col[kk]=col[k];break;}}
+        grid[k]=0;
+      }
+    }
+  }
+}
+function step(){
+  for(let y=H-2;y>=0;y--){
+    const ltr=Math.random()<.5, row=y*W;
+    for(let i=0;i<W;i++){
+      const x=ltr?i:W-1-i, k=row+x;
+      if(grid[k]!==1)continue;
+      const b=k+W;
+      if(!grid[b]&&!mask[b]){grid[b]=1;col[b]=col[k];grid[k]=0;continue;}
+      const d=Math.random()<.5?-1:1;
+      if(x+d>=0&&x+d<W&&!grid[b+d]&&!mask[b+d]){grid[b+d]=1;col[b+d]=col[k];grid[k]=0;continue;}
+      if(x-d>=0&&x-d<W&&!grid[b-d]&&!mask[b-d]){grid[b-d]=1;col[b-d]=col[k];grid[k]=0;}
+    }
+  }
+}
+function draw(){
+  const d=img.data;
+  for(let k=0,n=W*H;k<n;k++){
+    const t=grid[k],o=k*4;
+    if(t){const c=t===2?STONE[col[k]%STONE.length]:SAND[col[k]%SAND.length]; d[o]=c[0];d[o+1]=c[1];d[o+2]=c[2];d[o+3]=255;}
+    else d[o+3]=0;
+  }
+  ctx.putImageData(img,0,0);
+}
+// pointer: pour sand and crumble name
+let pouring=false, px=0, py=0;
+cv.addEventListener('pointerdown',e=>{pouring=true;px=e.clientX;py=e.clientY;});
+addEventListener('pointerup',()=>pouring=false);
+addEventListener('pointermove',e=>{px=e.clientX;py=e.clientY; if(!dragCard)crumble(px,py,5);});
+function crumble(sx,sy,r){
+  const cx=(sx/CELL)|0, cy=(sy/CELL)|0;
+  for(let y=cy-r;y<=cy+r;y++)for(let x=cx-r;x<=cx+r;x++){
+    if(x<0||y<0||x>=W||y>=H||(x-cx)**2+(y-cy)**2>r*r)continue;
+    const k=y*W+x; if(grid[k]===2){grid[k]=1;col[k]=(Math.random()*SAND.length)|0;}
+  }
+}
+function pour(){
+  if(!pouring||dragCard)return;
+  const cx=(px/CELL)|0, cy=(py/CELL)|0;
+  for(let n=0;n<10;n++){
+    const x=cx+((Math.random()*7)|0)-3, y=cy+((Math.random()*7)|0)-3;
+    if(x<0||y<0||x>=W||y>=H)continue;
+    const k=y*W+x; if(!grid[k]&&!mask[k]){grid[k]=1;col[k]=(Math.random()*SAND.length)|0;}
+  }
+}
+function loop(){ physics(); rasterCards(); pour(); step(); draw(); requestAnimationFrame(loop); }
+// UI
+const modal=document.getElementById('modal'), panel=document.getElementById('panel');
+function open(p){
+  panel.style.setProperty('--c',p.c);
+  panel.innerHTML=`<h2>${p.name}</h2><div class="meta">${p.year} · ${p.stack}</div>
+  <div class="clip">gameplay clip goes here</div>
+  <dl><dt>What it is</dt><dd>${p.pitch}</dd><dt>Hardest part</dt><dd>${p.hard}</dd><dt>What I learned</dt><dd>${p.learned}</dd></dl>
+  <button id="close">Close</button><div class="note">Sample text, swap in your own.</div>`;
+  modal.hidden=false; document.getElementById('close').focus();
+  document.getElementById('close').onclick=()=>modal.hidden=true;
+}
+modal.addEventListener('pointerdown',e=>{if(e.target===modal)modal.hidden=true;});
+addEventListener('keydown',e=>{if(e.key==='Escape')modal.hidden=true;});
+document.getElementById('crumble').onclick=()=>{for(let k=0;k<W*H;k++)if(grid[k]===2){grid[k]=1;col[k]=(Math.random()*SAND.length)|0;}};
+document.getElementById('clear').onclick=()=>{for(let k=0;k<W*H;k++)if(grid[k]===1)grid[k]=0;};
+document.getElementById('list').innerHTML=P.map(p=>`<article><h3>${p.name} <span class="note">${p.year} · ${p.stack}</span></h3><div>${p.pitch}</div><div><b>Hardest part:</b> ${p.hard}</div><div><b>Learned:</b> ${p.learned}</div></article>`).join('');
+document.getElementById('boringBtn').onclick=()=>document.getElementById('boring').hidden=false;
+document.getElementById('funBtn').onclick=()=>document.getElementById('boring').hidden=true;
+let rt; addEventListener('resize',()=>{clearTimeout(rt);rt=setTimeout(()=>{resize();},200);});
+const fontReady=document.fonts&&document.fonts.load?document.fonts.load('700 40px Silkscreen').catch(()=>{}):Promise.resolve();
+Promise.race([fontReady,new Promise(r=>setTimeout(r,1500))]).then(()=>{resize(); layoutCards(); loop();});
+</script>
+</body>
+</html>

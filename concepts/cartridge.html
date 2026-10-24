@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cartridge Shelf</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Rubik+Mono+One&family=IBM+Plex+Mono:wght@400;600&display=swap">
+<style>
+/* A bedroom shelf of game cartridges beside a CRT + console; inserting one boots that project */
+:root{
+  --room:#1b1714; --room2:#2a221c; --wood:#6b4a2f; --woodDark:#3e2a1a;
+  --plastic:#9a958d; --plasticDark:#6f6a63; --console:#d9d3c7; --consoleDark:#a9a296;
+  --screen:#0c1410; --phosphor:#c8ffd8; --led:#ff3b3b; --ink:#efe6d8; --muted:#a8998a;
+  --pixel:"Press Start 2P", ui-monospace, monospace;
+  --label:"Rubik Mono One", Impact, sans-serif;
+  --body:"IBM Plex Mono", ui-monospace, monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0;min-height:100%}
+body{background:radial-gradient(ellipse at 70% 0%,#3a2c20 0%,var(--room) 60%);color:var(--ink);font-family:var(--body);padding:24px max(16px,env(safe-area-inset-right)) 32px max(16px,env(safe-area-inset-left))}
+header{max-width:1100px;margin:0 auto 22px;display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
+h1{font:16px/1.4 var(--pixel);margin:0;letter-spacing:.04em}
+header p{margin:0;color:var(--muted);font-size:13px}
+main{max-width:1100px;margin:0 auto;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:36px;align-items:end}
+@media (max-width:820px){main{grid-template-columns:1fr} .setup{order:-1}}
+/* shelf */
+.shelf{display:grid;gap:30px}
+.row{display:flex;gap:12px;align-items:flex-end;padding:0 12px;border-bottom:16px solid var(--wood);box-shadow:0 10px 0 var(--woodDark);min-height:170px;flex-wrap:wrap}
+.cart{all:unset;cursor:pointer;width:104px;height:140px;position:relative;background:linear-gradient(90deg,var(--plasticDark),var(--plastic) 12%,var(--plastic) 88%,var(--plasticDark));border-radius:8px 8px 3px 3px;box-shadow:inset 0 -6px 0 rgba(0,0,0,.25),0 4px 0 rgba(0,0,0,.4);transition:transform .18s, opacity .25s;flex:none}
+.cart::before{content:"";position:absolute;left:10px;right:10px;top:6px;height:12px;background:repeating-linear-gradient(90deg,rgba(0,0,0,.28) 0 3px,transparent 3px 7px)}
+.cart:hover,.cart:focus-visible{transform:translateY(-10px)}
+.cart:focus-visible{outline:3px solid var(--phosphor);outline-offset:4px}
+.cart.out{opacity:.15;pointer-events:none}
+.lbl{position:absolute;left:9px;right:9px;top:24px;bottom:16px;background:var(--c);border-radius:3px;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end}
+.lbl::before{content:"";position:absolute;inset:0;background:radial-gradient(circle at 30% 30%,rgba(255,255,255,.35) 0 2px,transparent 3px) 0 0/10px 10px,linear-gradient(160deg,rgba(255,255,255,.25),transparent 55%)}
+.lbl span{position:relative;background:#f4efe6;color:#1d1a17;font:9px/1.25 var(--label);padding:5px 5px 4px;text-transform:uppercase}
+.lbl small{position:relative;font:7px var(--pixel);color:#fff;padding:0 5px 4px;text-shadow:1px 1px 0 #000}
+/* tv + console */
+.setup{display:grid;justify-items:center;gap:0}
+.tv{width:100%;max-width:560px;background:linear-gradient(#3b3631,#2a2622);border-radius:28px;padding:26px 26px 40px;box-shadow:0 20px 50px rgba(0,0,0,.5),inset 0 2px 0 rgba(255,255,255,.08);position:relative}
+.tv::after{content:"ODIN-VISION";position:absolute;bottom:12px;left:28px;font:8px var(--pixel);color:#7d746a;letter-spacing:.2em}
+.screen{position:relative;aspect-ratio:4/3;max-width:100%;background:var(--screen);border-radius:18px/22px;overflow:hidden;box-shadow:inset 0 0 40px rgba(0,0,0,.9)}
+.screen canvas{position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated}
+.screen::after{content:"";position:absolute;inset:0;background:repeating-linear-gradient(0deg,rgba(0,0,0,.28) 0 2px,transparent 2px 4px),radial-gradient(ellipse at center,transparent 60%,rgba(0,0,0,.55));pointer-events:none}
+.osd{position:absolute;inset:0;padding:6% 7%;display:flex;flex-direction:column;gap:10px;color:var(--phosphor);text-shadow:0 0 6px rgba(200,255,216,.6);font:10px/1.7 var(--pixel);z-index:1}
+.osd h2{font:clamp(14px,3.4vw,22px)/1.3 var(--pixel);margin:0;color:var(--c,var(--phosphor));text-shadow:0 0 10px var(--c,#fff),3px 3px 0 #000}
+.osd .blink{animation:blink 1s steps(2) infinite}
+.osd .mid{margin:auto;text-align:center}
+.osd .info{background:rgba(0,0,0,.55);padding:10px 12px;margin-top:auto;display:grid;gap:6px;font-size:clamp(7px,1.5vw,9px)}
+.osd .info b{color:#ffe08a;font-weight:400}
+@keyframes blink{50%{opacity:0}}
+.console{width:78%;max-width:440px;background:linear-gradient(var(--console),var(--consoleDark));border-radius:10px 10px 18px 18px;margin-top:22px;height:96px;position:relative;box-shadow:0 14px 30px rgba(0,0,0,.5),inset 0 2px 0 #fff8}
+.slot{position:absolute;left:50%;top:12px;transform:translateX(-50%);width:130px;height:14px;background:#2b2724;border-radius:3px;box-shadow:inset 0 3px 4px #000}
+.incart{position:absolute;left:50%;bottom:calc(100% - 20px);transform:translateX(-50%);width:104px;height:70px;background:linear-gradient(90deg,var(--plasticDark),var(--plastic) 12%,var(--plastic) 88%,var(--plasticDark));border-radius:8px 8px 0 0;overflow:hidden;transition:transform .3s}
+.incart .lbl{top:14px;bottom:0}
+.controls{position:absolute;left:16px;right:16px;bottom:14px;display:flex;justify-content:space-between;align-items:center;gap:10px}
+.led{width:10px;height:10px;border-radius:50%;background:#5a2020}
+.led.on{background:var(--led);box-shadow:0 0 10px var(--led)}
+.controls button{font:8px var(--pixel);background:#3a3531;color:#e8e0d4;border:none;border-bottom:3px solid #1d1a17;padding:8px 10px;border-radius:4px;cursor:pointer}
+.controls button:active{transform:translateY(2px);border-bottom-width:1px}
+.controls button:focus-visible{outline:2px solid var(--phosphor)}
+.foot{max-width:1100px;margin:28px auto 0;color:var(--muted);font-size:12px}
+.flyer{position:fixed;z-index:50;pointer-events:none}
+</style>
+</head>
+<body>
+<header><h1>ODIN'S GAME SHELF</h1><p>Pick a cartridge to boot a project.</p></header>
+<main>
+  <section class="shelf" aria-label="Project cartridges"><div class="row" id="row1"></div><div class="row" id="row2"></div></section>
+  <section class="setup">
+    <div class="tv"><div class="screen" id="screen"><canvas id="crt" width="160" height="120"></canvas><div class="osd" id="osd"></div></div></div>
+    <div class="console" id="console"><div class="slot"></div>
+      <div class="controls"><span class="led" id="led"></span><span style="font:7px var(--pixel);color:#6d665d">ODIN·ENTERTAINMENT·SYSTEM</span><button id="eject">EJECT</button></div>
+    </div>
+  </section>
+</main>
+<p class="foot">Project details are sample text. Each cartridge would boot a real clip of the project.</p>
+<script>
+const P=[
+ {name:'Pixel Physics',year:'2025',stack:'JavaScript · Canvas',c:'#e9c46a',fx:'sand',pitch:'A falling-sand sandbox where every pixel is a particle.',hard:'Tens of thousands of particles at 60 fps.',learned:'Cellular automata and typed arrays.'},
+ {name:'Physics Sim',year:'2025',stack:'JavaScript',c:'#2a9d8f',fx:'balls',pitch:'Rigid bodies, springs and collisions from scratch.',hard:'Fast objects tunnelling through walls.',learned:'Integrators and fixed timesteps.'},
+ {name:'Escanor vs Mob',year:'2026',stack:'Unity · C#',c:'#e76f51',fx:'swarm',pitch:'One overpowered hero against an endless mob.',hard:'Hundreds of enemies without lag.',learned:'Object pooling and game feel.'},
+ {name:'Redline',year:'2026',stack:'Your stack',c:'#d62828',fx:'road',pitch:'Sample pitch for Redline.',hard:'Sample hardest problem.',learned:'Sample lesson.'},
+ {name:'America Quest',year:'2025',stack:'Your stack',c:'#5b8bd0',fx:'stars',pitch:'Sample pitch for America Quest.',hard:'Sample hardest problem.',learned:'Sample lesson.'},
+ {name:'Elden Cube',year:'2026',stack:'Your stack',c:'#9b72cf',fx:'cube',pitch:'Sample pitch for Elden Cube.',hard:'Sample hardest problem.',learned:'Sample lesson.'}
+];
+const lblHTML=p=>`<div class="lbl" style="--c:${p.c}"><small>${p.year}</small><span>${p.name}</span></div>`;
+const carts=P.map((p,i)=>{
+  const b=document.createElement('button'); b.className='cart'; b.innerHTML=lblHTML(p);
+  b.setAttribute('aria-label','Insert '+p.name);
+  b.onclick=()=>insert(i);
+  document.getElementById(i<3?'row1':'row2').appendChild(b); return b;
+});
+const osd=document.getElementById('osd'), con=document.getElementById('console'), led=document.getElementById('led');
+const cv=document.getElementById('crt'), g=cv.getContext('2d');
+let current=-1, mode='idle', t0=0, busy=false;
+function idle(){mode='idle'; osd.style.removeProperty('--c');
+  osd.innerHTML=`<div class="mid"><div class="blink">INSERT CARTRIDGE</div><div style="margin-top:14px;opacity:.6">◄ PICK ONE FROM THE SHELF</div></div>`;}
+async function insert(i){
+  if(busy)return; busy=true;
+  if(current>=0) await eject(true);
+  const src=carts[i], r=src.getBoundingClientRect(), slot=con.querySelector('.slot').getBoundingClientRect();
+  const fly=src.cloneNode(true); fly.className='cart flyer';
+  Object.assign(fly.style,{left:r.left+'px',top:r.top+'px',margin:0});
+  document.body.appendChild(fly); src.classList.add('out');
+  const dx=slot.left+slot.width/2-(r.left+r.width/2), dy=slot.top-r.bottom+40;
+  const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+  await fly.animate([{transform:'none'},{transform:`translate(${dx}px,${dy-90}px) rotate(-4deg)`,offset:.65},{transform:`translate(${dx}px,${dy}px)`}],{duration:reduce?1:650,easing:'cubic-bezier(.3,.7,.3,1)'}).finished;
+  fly.remove();
+  const ic=document.createElement('div'); ic.className='incart'; ic.innerHTML=lblHTML(P[i]); con.appendChild(ic);
+  current=i; boot(P[i]); busy=false;
+}
+async function eject(silent){
+  const ic=con.querySelector('.incart'); if(!ic)return;
+  ic.style.transform='translate(-50%,-30px)'; await new Promise(r=>setTimeout(r,250));
+  ic.remove(); carts[current].classList.remove('out'); current=-1; led.classList.remove('on');
+  if(!silent)idle();
+}
+document.getElementById('eject').onclick=()=>{if(!busy)eject(false)};
+function boot(p){
+  led.classList.add('on'); mode='boot'; t0=performance.now();
+  osd.style.setProperty('--c',p.c);
+  osd.innerHTML=`<div class="mid">© 2026 ODIN SOFT<br><br>LICENSED BY YOU<br><br><span class="blink">LOADING...</span></div>`;
+  setTimeout(()=>{ if(P[current]!==p)return; mode=p.fx; t0=performance.now(); initFx(p.fx);
+    osd.innerHTML=`<h2>${p.name.toUpperCase()}</h2><div>${p.year} · ${p.stack}</div>
+    <div class="info"><div>${p.pitch}</div><div><b>BOSS FIGHT:</b> ${p.hard}</div><div><b>LOOT:</b> ${p.learned}</div><div class="blink" style="margin-top:4px">PRESS EJECT TO SWAP</div></div>`;},1300);
+}
+// attract-mode effects at 160x120
+let parts=[], sandGrid=null;
+function initFx(fx){
+  parts=[];
+  if(fx==='sand'){sandGrid=new Uint8Array(160*120);}
+  if(fx==='balls')for(let i=0;i<9;i++)parts.push({x:20+Math.random()*120,y:10+Math.random()*40,vx:(Math.random()-.5)*2,vy:0,r:3+Math.random()*5});
+  if(fx==='swarm')for(let i=0;i<160;i++){const a=Math.random()*6.28,d=60+Math.random()*30;parts.push({x:80+Math.cos(a)*d,y:60+Math.sin(a)*d});}
+  if(fx==='stars')for(let i=0;i<90;i++)parts.push({x:Math.random()*160,y:Math.random()*120,z:Math.random()*2+.3});
+}
+function frame(now){
+  const t=(now-t0)/1000, c=P[current]?P[current].c:'#fff';
+  if(mode==='idle'||mode==='boot'){
+    const id=g.createImageData(160,120);
+    for(let k=0;k<id.data.length;k+=4){const v=mode==='idle'?Math.random()*70:Math.random()*20;id.data[k]=id.data[k+1]=id.data[k+2]=v;id.data[k+3]=255;}
+    g.putImageData(id,0,0);
+  } else {
+    g.fillStyle='#0c1410'; g.fillRect(0,0,160,120); g.fillStyle=c; g.strokeStyle=c;
+    if(mode==='sand'){
+      for(let n=0;n<3;n++){const x=70+((Math.random()*20)|0); sandGrid[x]=1;}
+      for(let y=118;y>=0;y--)for(let x=0;x<160;x++){const k=y*160+x;if(!sandGrid[k])continue;const b=k+160;
+        if(!sandGrid[b]){sandGrid[b]=1;sandGrid[k]=0;}else{const d=Math.random()<.5?-1:1;if(x+d>=0&&x+d<160&&!sandGrid[b+d]){sandGrid[b+d]=1;sandGrid[k]=0;}}}
+      for(let k=0;k<160*120;k++)if(sandGrid[k])g.fillRect(k%160,(k/160)|0,1,1);
+      if(sandGrid[60*160+80])sandGrid.fill(0);
+    }
+    if(mode==='balls')for(const b of parts){b.vy+=.15;b.x+=b.vx;b.y+=b.vy;
+      if(b.y>118-b.r){b.y=118-b.r;b.vy*=-.85} if(b.x<b.r||b.x>160-b.r)b.vx*=-1;
+      g.beginPath();g.arc(b.x|0,b.y|0,b.r,0,6.28);g.fill();}
+    if(mode==='swarm'){g.fillStyle='#fff';g.fillRect(78,56,4,8);g.fillStyle=c;
+      for(const p of parts){const dx=80-p.x,dy=60-p.y,d=Math.hypot(dx,dy)||1;
+        if(d<10){const a=Math.random()*6.28;p.x=80+Math.cos(a)*90;p.y=60+Math.sin(a)*90;}
+        p.x+=dx/d*.6+(Math.random()-.5);p.y+=dy/d*.6+(Math.random()-.5);g.fillRect(p.x|0,p.y|0,2,2);}
+      if((t*2|0)%3===0){g.globalAlpha=.4;g.beginPath();g.arc(80,60,(t*60)%60,0,6.28);g.stroke();g.globalAlpha=1;}}
+    if(mode==='road'){g.fillStyle='#1a0b0b';g.fillRect(0,60,160,60);g.fillStyle=c;
+      for(let i=0;i<14;i++){const z=((i/14)+t*.8)%1, y=60+z*z*60, w=4+z*z*90;
+        g.fillRect(80-w/2-z*30,y,2+z*4,1+z*3);g.fillRect(80+w/2+z*30,y,2+z*4,1+z*3);
+        if(i%2)g.fillRect(79,y,2,1+z*4);}
+      g.fillStyle='#fff';g.fillRect(72,100,16,8);g.fillStyle=c;g.fillRect(70,104,20,6);}
+    if(mode==='stars')for(const s of parts){s.x-=s.z;if(s.x<0)s.x+=160;g.globalAlpha=s.z/2.3;g.fillRect(s.x|0,s.y|0,s.z>1.5?2:1,1);g.globalAlpha=1;}
+    if(mode==='cube'){const V=[];for(const x of[-1,1])for(const y of[-1,1])for(const z of[-1,1]){
+        const a=t*.9,b=t*.6;let X=x*Math.cos(a)-z*Math.sin(a),Z=x*Math.sin(a)+z*Math.cos(a);let Y=y*Math.cos(b)-Z*Math.sin(b);Z=y*Math.sin(b)+Z*Math.cos(b);
+        const s=60/(Z+3.5);V.push([80+X*s,60+Y*s]);}
+      g.lineWidth=1;g.beginPath();for(let i=0;i<8;i++)for(let j=i+1;j<8;j++){const d=(i^j);if(d===1||d===2||d===4){g.moveTo(V[i][0],V[i][1]);g.lineTo(V[j][0],V[j][1]);}}g.stroke();}
+  }
+  requestAnimationFrame(frame);
+}
+idle(); requestAnimationFrame(frame);
+</script>
+</body>
+</html>

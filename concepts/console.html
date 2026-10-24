@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Odin Dev Console</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=VT323&display=swap">
+<style>
+/* Amber-phosphor terminal filling the screen, with tap-able command chips for non-typists */
+:root{
+  --bg:#140d04; --glow:#ffb000; --dim:#a8741a; --hi:#ffe2a0; --err:#ff6a3d;
+  --mono:"VT323", ui-monospace, Menlo, monospace;
+  color-scheme:dark;
+}
+:root.green{--bg:#04110a;--glow:#45ff8f;--dim:#2a9b59;--hi:#c9ffe0}
+:root.blue{--bg:#050b18;--glow:#7cc7ff;--dim:#3f7bb0;--hi:#dff1ff}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--glow);font:21px/1.25 var(--mono);text-shadow:0 0 6px color-mix(in srgb,var(--glow) 60%,transparent);display:flex;flex-direction:column}
+body::after{content:"";position:fixed;inset:0;pointer-events:none;background:repeating-linear-gradient(0deg,rgba(0,0,0,.25) 0 1px,transparent 1px 3px),radial-gradient(ellipse at center,transparent 55%,rgba(0,0,0,.6));animation:flick 4s infinite}
+@keyframes flick{0%,96%,100%{opacity:1}97%{opacity:.85}}
+@media (prefers-reduced-motion:reduce){body::after{animation:none}}
+#scr{flex:1;overflow-y:auto;padding:18px max(16px,env(safe-area-inset-right)) 8px max(16px,env(safe-area-inset-left))}
+.ln{white-space:pre-wrap;word-break:break-word;min-height:1.25em}
+.dim{color:var(--dim)} .hi{color:var(--hi)} .err{color:var(--err)}
+.row{display:flex;gap:8px;align-items:center}
+#cmd{flex:1;min-width:0;background:transparent;border:none;color:var(--hi);font:inherit;text-shadow:inherit;caret-color:var(--glow);outline:none}
+pre{margin:0;font:inherit;line-height:1}
+.chips{display:flex;gap:8px;flex-wrap:wrap;padding:10px max(16px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));border-top:1px solid color-mix(in srgb,var(--glow) 30%,transparent)}
+.chips button{font:inherit;font-size:18px;color:var(--glow);background:transparent;border:1px solid var(--dim);padding:2px 10px;cursor:pointer;text-shadow:inherit}
+.chips button:hover,.chips button:focus-visible{background:var(--glow);color:var(--bg);outline:none}
+a{color:var(--hi)}
+</style>
+</head>
+<body>
+<div id="scr"><div id="out"></div><label class="row" id="prompt" hidden><span>odin@portfolio:~$</span><input id="cmd" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Command"></label></div>
+<div class="chips" id="chips"></div>
+<script>
+const P=[
+ {id:'pixel-physics',name:'Pixel Physics',year:'2025',stack:'JavaScript, Canvas',pitch:'A falling-sand sandbox where every pixel is a particle with its own rules.',hard:'Keeping tens of thousands of particles at 60 fps.',learned:'Cellular automata, update-order bugs, typed arrays.'},
+ {id:'physics-sim',name:'Physics Simulation',year:'2025',stack:'JavaScript',pitch:'Rigid bodies, springs and collisions written from scratch.',hard:'Fast objects tunnelling through each other.',learned:'Integrators and fixed timesteps.'},
+ {id:'escanor-vs-mob',name:'Escanor vs Mob',year:'2026',stack:'Unity, C#',pitch:'An arena brawler: one overpowered hero against an endless mob.',hard:'Hundreds of enemies without frame drops.',learned:'Object pooling, steering AI, game feel.'},
+ {id:'redline',name:'Redline',year:'2026',stack:'(your stack)',pitch:'Sample pitch for Redline.',hard:'Sample hardest problem.',learned:'Sample lesson.'},
+ {id:'america-quest',name:'America Quest',year:'2025',stack:'(your stack)',pitch:'Sample pitch for America Quest.',hard:'Sample hardest problem.',learned:'Sample lesson.'},
+ {id:'elden-cube',name:'Elden Cube',year:'2026',stack:'(your stack)',pitch:'Sample pitch for Elden Cube.',hard:'Sample hardest problem.',learned:'Sample lesson.'}
+];
+const out=document.getElementById('out'), scr=document.getElementById('scr'), cmd=document.getElementById('cmd'), prompt=document.getElementById('prompt');
+const esc=s=>s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function print(html,cls=''){const d=document.createElement('div');d.className='ln '+cls;d.innerHTML=html;out.appendChild(d);scr.scrollTop=scr.scrollHeight;return d;}
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const find=a=>P.find(p=>p.id===a||p.name.toLowerCase()===a);
+let busy=false;
+const C={
+  help(){print(`<span class="hi">available commands</span>
+  ls              list projects
+  cat &lt;project&gt;   read about a project
+  run &lt;project&gt;   launch a demo
+  about           who is this
+  contact         how to reach me
+  theme &lt;amber|green|blue&gt;
+  clear           clear the screen
+<span class="dim">tip: tab completes project names, ↑ ↓ for history. some commands are hidden.</span>`);},
+  ls(){print(P.map(p=>`<span class="hi">${p.id.padEnd(16)}</span>${p.year}  ${p.stack}`).join('\n'));},
+  cat(a){const p=find(a);if(!p)return print(a?`cat: ${esc(a)}: no such project. try <span class="hi">ls</span>`:'usage: cat &lt;project&gt;','err');
+    print(`<span class="hi"># ${p.name}</span>  <span class="dim">${p.year} · ${p.stack}</span>
+${p.pitch}
+
+<span class="hi">## hardest part</span>
+${p.hard}
+
+<span class="hi">## what I learned</span>
+${p.learned}
+<span class="dim">(sample text) → run ${p.id}</span>`);},
+  async run(a){const p=find(a);if(!p)return print(a?`run: ${esc(a)}: not found`:'usage: run &lt;project&gt;','err');
+    print(`launching ${p.name}...`,'dim'); await sleep(300);
+    if(p.id==='pixel-physics')return sand();
+    const bar=print('');for(let i=0;i<=24;i++){bar.textContent='['+'#'.repeat(i)+'.'.repeat(24-i)+'] '+Math.round(i/24*100)+'%';await sleep(35);}
+    print(`<span class="hi">▶ ${p.name}</span> would play its gameplay clip here.`);},
+  about(){print(`<span class="hi">odin</span> · student · game dev · physics nerd
+I build games and simulations, mostly from scratch, because
+I want to know how every pixel moves.
+<span class="dim">(sample bio, swap in your own)</span>`);},
+  contact(){print(`email   you@example.com
+github  github.com/your-handle
+<span class="dim">(placeholders)</span>`);},
+  theme(a){document.documentElement.className=(a==='green'||a==='blue')?a:'';print(`theme set to ${a==='green'||a==='blue'?a:'amber'}`,'dim');},
+  clear(){out.innerHTML='';},
+  whoami(){print('admissions-reader (probably)');},
+  secret(){print('try: <span class="hi">sudo admit-me</span>');},
+  async sudo(a){if(a==='admit-me'||a==='hire-me'){print('[sudo] password for admissions: ********','dim');await sleep(700);
+    print('<span class="hi">ACCESS GRANTED.</span> welcome to the class of 2031. ✦');}else print('sudo: nice try','err');}
+};
+async function sand(){
+  const Wd=44,Hd=12,g=Array.from({length:Hd},()=>Array(Wd).fill(' '));
+  const pre=document.createElement('pre');print('').appendChild(pre);
+  for(let f=0;f<110;f++){
+    if(f<80)g[0][20+((Math.random()*5)|0)]='.';
+    for(let y=Hd-2;y>=0;y--)for(let x=0;x<Wd;x++){if(g[y][x]===' ')continue;
+      if(g[y+1][x]===' '){g[y+1][x]=g[y][x];g[y][x]=' ';}
+      else{const d=Math.random()<.5?-1:1;if(g[y+1][x+d]===' '){g[y+1][x+d]=g[y][x];g[y][x]=' ';}}}
+    for(let x=0;x<Wd;x++)if(g[Hd-1][x]==='.'&&g[Hd-2][x]!==' ')g[Hd-1][x]=':';
+    pre.textContent='+'+'-'.repeat(Wd)+'+\n'+g.map(r=>'|'+r.join('')+'|').join('\n')+'\n+'+'-'.repeat(Wd)+'+';
+    scr.scrollTop=scr.scrollHeight; await sleep(45);}
+  print('pixel-physics exited with code 0','dim');
+}
+const hist=[];let hi=0;
+async function exec(line){
+  print(`<span class="dim">odin@portfolio:~$</span> <span class="hi">${esc(line)}</span>`);
+  const [c,...rest]=line.trim().split(/\s+/);const a=rest.join(' ').toLowerCase();
+  if(!c)return;
+  hist.push(line);hi=hist.length;
+  const fn=C[c.toLowerCase()];
+  if(!fn)return print(`${esc(c)}: command not found. type <span class="hi">help</span>`,'err');
+  busy=true;prompt.hidden=true;await fn(a);busy=false;prompt.hidden=false;cmd.focus({preventScroll:true});scr.scrollTop=scr.scrollHeight;
+}
+cmd.addEventListener('keydown',e=>{
+  if(e.key==='Enter'){const v=cmd.value;cmd.value='';exec(v);}
+  else if(e.key==='ArrowUp'){if(hi>0)cmd.value=hist[--hi];e.preventDefault();}
+  else if(e.key==='ArrowDown'){hi=Math.min(hist.length,hi+1);cmd.value=hist[hi]||'';e.preventDefault();}
+  else if(e.key==='Tab'){e.preventDefault();const parts=cmd.value.split(' ');const last=parts.pop();
+    const pool=parts.length?P.map(p=>p.id):Object.keys(C);const m=pool.filter(x=>x.startsWith(last));
+    if(m.length===1){parts.push(m[0]);cmd.value=parts.join(' ')+(parts.length===1?' ':'');}else if(m.length>1)print(m.join('  '),'dim');}
+});
+scr.addEventListener('click',()=>{if(!getSelection().toString())cmd.focus({preventScroll:true});});
+const chips=['help','ls','cat pixel-physics','run pixel-physics','about','theme green','secret'];
+document.getElementById('chips').innerHTML=chips.map(c=>`<button>${c}</button>`).join('');
+document.getElementById('chips').addEventListener('click',e=>{if(e.target.tagName==='BUTTON'&&!busy)exec(e.target.textContent);});
+(async()=>{
+  const boot=['ODIN-BIOS v2.6 · memory check 640K ok','mounting /projects ........ 6 found','loading personality.dll ... ok',''];
+  for(const l of boot){print(l,'dim');await sleep(220);}
+  print(`<span class="hi">   ___  ___ ___ _  _
+  / _ \\|   \\_ _| \\| |
+ | (_) | |) | || .\` |
+  \\___/|___/___|_|\\_|</span>
+game dev · simulations · student
+type <span class="hi">help</span> or tap a command below.`);
+  prompt.hidden=false;cmd.focus({preventScroll:true});
+})();
+</script>
+</body>
+</html>

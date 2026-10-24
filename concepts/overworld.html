@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Odin's Overworld</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;700&display=swap">
+<style>
+/* Top-down pixel town: each house is a project, walking to its door opens the dialog */
+:root{
+  --ink:#1f1a24; --paper:#fbf6ea; --edge:#1f1a24; --muted:#6c6375; --gold:#f2b63c;
+  --pix:"Pixelify Sans", ui-monospace, monospace;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%;margin:0;overflow:hidden;background:#2f6b3a}
+body{font-family:var(--pix);color:var(--ink);touch-action:none;user-select:none;-webkit-user-select:none}
+canvas{display:block;width:100%;height:100%;image-rendering:pixelated}
+.tags{position:fixed;inset:0;pointer-events:none}
+.tag{position:absolute;transform:translate(-50%,-100%);background:var(--paper);border:2px solid var(--edge);padding:1px 6px;font-size:13px;white-space:nowrap;box-shadow:2px 2px 0 rgba(0,0,0,.35)}
+.tag.seen::after{content:" ✓";color:#2a8a4a}
+.hud{position:fixed;top:max(12px,env(safe-area-inset-top));left:max(12px,env(safe-area-inset-left));background:var(--paper);border:3px solid var(--edge);padding:6px 10px;font-size:15px;box-shadow:3px 3px 0 rgba(0,0,0,.35)}
+.dialog{position:fixed;left:50%;transform:translateX(-50%);bottom:max(14px,env(safe-area-inset-bottom));width:min(640px,calc(100% - 28px));background:var(--paper);border:4px solid var(--edge);outline:3px solid var(--paper);box-shadow:0 0 0 7px var(--edge),6px 10px 0 7px rgba(0,0,0,.3);padding:14px 18px 16px;display:grid;gap:6px;font-size:17px;line-height:1.35}
+.dialog h2{margin:0;font-size:22px;display:flex;justify-content:space-between;gap:10px;align-items:baseline}
+.dialog h2 small{font-size:13px;color:var(--muted);font-weight:400}
+.dialog .more{display:grid;gap:4px;font-size:15px}
+.dialog b{color:#b4462e;font-weight:700}
+.dialog .arrow{justify-self:end;animation:bob .6s steps(2) infinite;font-size:14px}
+@keyframes bob{50%{transform:translateY(3px)}}
+.intro{position:fixed;inset:0;display:grid;place-items:center;background:rgba(20,30,20,.45);padding:16px}
+.intro .box{background:var(--paper);border:4px solid var(--edge);box-shadow:0 0 0 4px var(--paper),0 0 0 8px var(--edge);padding:22px 24px;max-width:440px;display:grid;gap:10px;text-align:center}
+.intro h1{margin:0;font-size:34px;line-height:1}
+.intro p{margin:0;font-size:16px;line-height:1.4}
+.intro button{font:700 18px var(--pix);background:var(--gold);border:3px solid var(--edge);padding:8px 14px;cursor:pointer;justify-self:center;box-shadow:3px 3px 0 var(--edge)}
+.intro button:focus-visible{outline:3px dashed var(--edge);outline-offset:3px}
+.note{font-size:12px;color:var(--muted)}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="tags" id="tags"></div>
+<div class="hud" id="hud">Visited 0 / 6</div>
+<div class="dialog" id="dlg" hidden></div>
+<div class="intro" id="intro"><div class="box">
+  <h1>ODIN'S WORLD</h1>
+  <p>Every house is a project. Walk up to a door to read about it.</p>
+  <p class="note">Arrow keys or WASD to walk. On a phone, tap where you want to go.</p>
+  <button id="go">Start ▶</button>
+</div></div>
+<script>
+const P=[
+ {name:'Pixel Physics',year:'2025',stack:'JavaScript · Canvas',c:'#e9b44c',pitch:'A falling-sand sandbox where every pixel is a particle with its own rules.',hard:'Keeping tens of thousands of particles at 60 fps.',learned:'Cellular automata and typed arrays.'},
+ {name:'Physics Sim',year:'2025',stack:'JavaScript',c:'#2a9d8f',pitch:'Rigid bodies, springs and collisions built with no engine.',hard:'Fast objects tunnelling through walls.',learned:'Integrators and fixed timesteps.'},
+ {name:'Escanor vs Mob',year:'2026',stack:'Unity · C#',c:'#d8573a',pitch:'An arena brawler: one overpowered hero against an endless mob.',hard:'Hundreds of enemies without frame drops.',learned:'Object pooling and game feel.'},
+ {name:'Redline',year:'2026',stack:'Your stack',c:'#b8262b',pitch:'Sample pitch for Redline.',hard:'Sample hardest problem.',learned:'Sample lesson.'},
+ {name:'America Quest',year:'2025',stack:'Your stack',c:'#4d7cc4',pitch:'Sample pitch for America Quest.',hard:'Sample hardest problem.',learned:'Sample lesson.'},
+ {name:'Elden Cube',year:'2026',stack:'Your stack',c:'#8a63c2',pitch:'Sample pitch for Elden Cube.',hard:'Sample hardest problem.',learned:'Sample lesson.'}
+];
+const T=16, MW=42, MH=28, G=0,PATH=1,TREE=2,WATER=3,WALL=4,DOOR=5,FLOWER=6;
+const map=new Uint8Array(MW*MH);
+const set=(x,y,v)=>{if(x>=0&&y>=0&&x<MW&&y<MH)map[y*MW+x]=v};
+const get=(x,y)=>(x<0||y<0||x>=MW||y>=MH)?TREE:map[y*MW+x];
+let seed=7; const rnd=()=>(seed=(seed*16807)%2147483647)/2147483647;
+for(let y=0;y<MH;y++)for(let x=0;x<MW;x++)if(x<2||y<2||x>=MW-2||y>=MH-2)set(x,y,TREE);
+for(let x=2;x<MW-2;x++){set(x,13,PATH);set(x,14,PATH);}
+for(let y=2;y<MH-2;y++){set(20,y,PATH);set(21,y,PATH);}
+for(let x=22;x<MW-2;x++)set(x,23,PATH);
+for(let y=17;y<=24;y++)for(let x=3;x<=13;x++)if(((x-8)/5.2)**2+((y-20.5)/3.6)**2<1)set(x,y,WATER);
+const B=[{x:4,y:6},{x:11,y:6},{x:26,y:6},{x:33,y:6},{x:26,y:17},{x:33,y:17}].map((b,i)=>({...b,p:P[i],seen:false}));
+for(const b of B){
+  for(let y=b.y;y<b.y+4;y++)for(let x=b.x;x<b.x+5;x++)set(x,y,WALL);
+  set(b.x+2,b.y+3,DOOR);
+  const end=b.y<13?12:22; for(let y=b.y+4;y<=end;y++)set(b.x+2,y,PATH);
+}
+const nearB=(x,y)=>B.some(b=>x>=b.x-1&&x<=b.x+5&&y>=b.y-1&&y<=b.y+4);
+for(let n=0;n<170;n++){const x=2+(rnd()*(MW-4))|0,y=2+(rnd()*(MH-4))|0;
+  if(get(x,y)===G&&!nearB(x,y)&&get(x+1,y)!==PATH&&get(x-1,y)!==PATH&&get(x,y+1)!==PATH&&get(x,y-1)!==PATH)set(x,y,TREE);}
+for(let n=0;n<120;n++){const x=(rnd()*MW)|0,y=(rnd()*MH)|0;if(get(x,y)===G)set(x,y,FLOWER);}
+// pre-render the whole map at 1 tile = 16px
+const off=document.createElement('canvas'); off.width=MW*T; off.height=MH*T; const o=off.getContext('2d');
+const R=(c,x,y,w,h)=>{o.fillStyle=c;o.fillRect(x,y,w,h)};
+function grass(px,py){R('#5fa34f',px,py,T,T);for(let i=0;i<5;i++)R(rnd()<.5?'#4f9142':'#6db55c',px+((rnd()*15)|0),py+((rnd()*15)|0),1,2);}
+for(let y=0;y<MH;y++)for(let x=0;x<MW;x++){
+  const t=get(x,y),px=x*T,py=y*T;
+  if(t===PATH){R('#dcbf82',px,py,T,T);for(let i=0;i<4;i++)R('#c7a96b',px+((rnd()*15)|0),py+((rnd()*15)|0),2,1);}
+  else if(t===WATER){R('#3f7fcf',px,py,T,T);R('#6ea6ea',px+((rnd()*10)|0),py+((rnd()*14)|0),5,1);}
+  else{grass(px,py);
+    if(t===FLOWER){const c=['#fff6d6','#f5799b','#ffd34d'][(rnd()*3)|0];R(c,px+6,py+6,2,2);R(c,px+9,py+9,2,2);}
+    if(t===TREE){R('rgba(0,0,0,.2)',px+2,py+12,13,4);R('#6b4226',px+6,py+10,4,5);R('#2f6b3a',px+1,py+1,14,11);R('#3f8a49',px+3,py+2,8,5);R('#2a5c33',px+1,py+9,14,3);}
+  }
+}
+for(const b of B){
+  const px=b.x*T,py=b.y*T,w=5*T;
+  R('rgba(0,0,0,.25)',px+4,py+4*T,w,4);
+  R('#efe2c8',px,py+2*T,w,2*T); R('#d9c7a5',px,py+4*T-3,w,3);
+  R(b.p.c,px-3,py+4,w+6,2*T-2);
+  for(let i=0;i<4;i++)R('rgba(0,0,0,.18)',px-3,py+8+i*7,w+6,1);
+  R('rgba(255,255,255,.25)',px-3,py+4,w+6,2);
+  R('#7a4a2a',px+2*T+3,py+3*T,10,T); R('#f2b63c',px+2*T+10,py+3*T+8,2,2);
+  for(const wx of[1,3]){R('#5b4636',px+wx*T+2,py+2*T+4,12,9);R('#9fd3f5',px+wx*T+3,py+2*T+5,10,7);R('#5b4636',px+wx*T+7,py+2*T+5,1,7);}
+}
+// player
+const cv=document.getElementById('c'), ctx=cv.getContext('2d');
+let S=3, pl={x:20.9,y:15.5,face:1,moving:false,anim:0}, keys={}, target=null, active=null, typing=null;
+function resize(){cv.width=innerWidth;cv.height=innerHeight;S=innerWidth<640?2:3;ctx.imageSmoothingEnabled=false;}
+addEventListener('resize',resize); resize();
+const solid=t=>t===TREE||t===WATER||t===WALL||t===DOOR;
+const blocked=(x,y)=>[[-.3,-.15],[.3,-.15],[-.3,.2],[.3,.2]].some(([dx,dy])=>solid(get(Math.floor(x+dx),Math.floor(y+dy))));
+addEventListener('keydown',e=>{keys[e.key.toLowerCase()]=true;target=null;if(e.key.startsWith('Arrow'))e.preventDefault();});
+addEventListener('keyup',e=>keys[e.key.toLowerCase()]=false);
+let cam={x:0,y:0};
+cv.addEventListener('pointerdown',e=>{target={x:cam.x+e.clientX/(T*S),y:cam.y+e.clientY/(T*S)};});
+const tagsEl=document.getElementById('tags');
+B.forEach(b=>{b.el=document.createElement('div');b.el.className='tag';b.el.textContent=b.p.name;tagsEl.appendChild(b.el);});
+const dlg=document.getElementById('dlg'), hud=document.getElementById('hud');
+function showDialog(b){
+  if(active===b)return; active=b;
+  if(!b){dlg.hidden=true;clearInterval(typing);return;}
+  if(!b.seen){b.seen=true;b.el.classList.add('seen');hud.textContent=`Visited ${B.filter(x=>x.seen).length} / 6`;}
+  dlg.hidden=false;
+  dlg.innerHTML=`<h2>${b.p.name}<small>${b.p.year} · ${b.p.stack}</small></h2><div id="tw"></div><div class="more" hidden id="more"><div><b>Hardest part:</b> ${b.p.hard}</div><div><b>Learned:</b> ${b.p.learned}</div><div class="note">Sample text. A real version would play a clip inside the house.</div></div><span class="arrow">▼</span>`;
+  const tw=document.getElementById('tw'), s=b.p.pitch; let i=0; clearInterval(typing);
+  typing=setInterval(()=>{tw.textContent=s.slice(0,++i);if(i>=s.length){clearInterval(typing);document.getElementById('more').hidden=false;}},22);
+}
+let last=performance.now(), started=false;
+document.getElementById('go').onclick=()=>{document.getElementById('intro').hidden=true;started=true;};
+function update(dt){
+  let vx=0,vy=0;
+  if(keys['arrowleft']||keys['a'])vx-=1; if(keys['arrowright']||keys['d'])vx+=1;
+  if(keys['arrowup']||keys['w'])vy-=1; if(keys['arrowdown']||keys['s'])vy+=1;
+  if(target&&!vx&&!vy){const dx=target.x-pl.x,dy=target.y-pl.y;
+    if(Math.abs(dx)>.15)vx=Math.sign(dx); if(Math.abs(dy)>.15)vy=Math.sign(dy); if(!vx&&!vy)target=null;}
+  if(!started){vx=vy=0;}
+  const len=Math.hypot(vx,vy)||1, sp=5.5*dt; vx=vx/len*sp; vy=vy/len*sp;
+  let moved=false;
+  if(vx&&!blocked(pl.x+vx,pl.y)){pl.x+=vx;moved=true;}
+  if(vy&&!blocked(pl.x,pl.y+vy)){pl.y+=vy;moved=true;}
+  if((vx||vy)&&!moved)target=null;
+  if(vx)pl.face=vx>0?1:-1;
+  pl.moving=moved; if(moved)pl.anim+=dt*8;
+  showDialog(B.find(b=>Math.abs(pl.x-(b.x+2.5))<.9&&pl.y>b.y+3.9&&pl.y<b.y+5.3)||null);
+}
+function draw(){
+  const vw=cv.width/(T*S), vh=cv.height/(T*S);
+  cam.x=vw>=MW?(MW-vw)/2:Math.max(0,Math.min(MW-vw,pl.x-vw/2));
+  cam.y=vh>=MH?(MH-vh)/2:Math.max(0,Math.min(MH-vh,pl.y-vh/2));
+  ctx.fillStyle='#2f6b3a';ctx.fillRect(0,0,cv.width,cv.height);
+  const ox=Math.round(-cam.x*T*S), oy=Math.round(-cam.y*T*S);
+  ctx.drawImage(off,ox,oy,MW*T*S,MH*T*S);
+  // player sprite (16x16 grid)
+  const sx=Math.round((pl.x-cam.x)*T*S-8*S), sy=Math.round((pl.y-cam.y)*T*S-14*S);
+  const p=(c,x,y,w,h)=>{ctx.fillStyle=c;ctx.fillRect(sx+(pl.face>0?x:16-x-w)*S,sy+y*S,w*S,h*S)};
+  const step=pl.moving?(Math.floor(pl.anim)%2):0;
+  p('rgba(0,0,0,.25)',4,14,8,2);
+  p('#2b2233',5,2,6,3); p('#f1c9a0',5,4,6,4); p('#2b2233',5,3,6,1); p('#1f1a24',9,5,1,1);
+  p('#f2b63c',4,8,8,4); p('#e0a12a',4,11,8,1);
+  p('#3a4f8f',5,12,2,step?2:3); p('#3a4f8f',9,12,2,step?3:2);
+  // house name tags
+  for(const b of B){b.el.style.left=((b.x+2.5-cam.x)*T*S)+'px';b.el.style.top=((b.y-cam.y)*T*S-4)+'px';}
+  if(target){ctx.strokeStyle='#fbf6ea';ctx.lineWidth=2;ctx.strokeRect(Math.floor(target.x-cam.x)*0+((target.x-cam.x)*T*S-5),(target.y-cam.y)*T*S-5,10,10);}
+}
+function loop(now){const dt=Math.min(.05,(now-last)/1000);last=now;update(dt);draw();requestAnimationFrame(loop);}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

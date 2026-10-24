@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Portfolio Speedrun</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;600;700&family=Azeret+Mono:wght@500;800&display=swap">
+<style>
+/* Stream-overlay layout: "game feed" with segment notes on the left, LiveSplit-style splits on the right */
+:root{
+  --bg:#0b0d12; --frame:#151924; --line:#262c3b; --ink:#e8ecf4; --muted:#8a93a8;
+  --ahead:#29d36b; --behind:#ff5a4f; --gold:#ffc83d; --hl:#2a4cff;
+  --ui:"Chakra Petch", system-ui, sans-serif;
+  --num:"Azeret Mono", ui-monospace, monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0;min-height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--ui);padding:16px max(16px,env(safe-area-inset-right)) 28px max(16px,env(safe-area-inset-left))}
+.top{max-width:1180px;margin:0 auto 14px;display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center;font-size:13px;color:var(--muted)}
+.live{background:var(--behind);color:#fff;font-weight:700;padding:2px 8px;letter-spacing:.08em}
+.top strong{color:var(--ink);font-size:15px}
+.layout{max-width:1180px;margin:0 auto;display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:16px}
+@media (max-width:900px){.layout{grid-template-columns:1fr}}
+.feed{background:var(--frame);border:1px solid var(--line);display:grid;grid-template-rows:auto auto;min-width:0}
+.game{aspect-ratio:16/9;max-width:100%;position:relative;overflow:hidden;background:radial-gradient(circle at 30% 40%,color-mix(in srgb,var(--c) 55%,#000) ,#07080c 75%)}
+.game canvas{position:absolute;inset:0;width:100%;height:100%}
+.game .title{position:absolute;left:5%;bottom:8%;right:5%}
+.game .title small{font:600 12px var(--ui);letter-spacing:.3em;color:var(--c);text-transform:uppercase}
+.game .title h2{margin:4px 0 0;font:700 clamp(28px,5.5vw,64px)/1 var(--ui);text-transform:uppercase;letter-spacing:-.01em;text-wrap:balance;text-shadow:0 4px 30px rgba(0,0,0,.6)}
+.game .clip{position:absolute;right:4%;top:6%;font-size:11px;color:var(--muted);border:1px dashed var(--muted);padding:4px 8px}
+.notes{padding:18px 20px 22px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}
+@media (max-width:640px){.notes{grid-template-columns:1fr}}
+.notes h3{margin:0 0 6px;font:600 11px var(--ui);letter-spacing:.2em;color:var(--muted);text-transform:uppercase}
+.notes p{margin:0;font-size:15px;line-height:1.5}
+/* splits */
+.splits{background:#000;border:1px solid var(--line);font-variant-numeric:tabular-nums;align-self:start}
+.sh{padding:12px 14px;text-align:center;border-bottom:1px solid var(--line);background:linear-gradient(#1a1f2c,#0c0f16)}
+.sh b{display:block;font-size:17px}
+.sh span{font-size:12px;color:var(--muted)}
+.sh .att{position:absolute}
+ol{list-style:none;margin:0;padding:0}
+li button{all:unset;box-sizing:border-box;cursor:pointer;width:100%;display:grid;grid-template-columns:22px minmax(0,1fr) 64px 86px;gap:8px;align-items:center;padding:8px 12px;border-bottom:1px solid #12151d;font-size:15px}
+li button:hover{background:#111622}
+li button:focus-visible{outline:2px solid var(--hl);outline-offset:-2px}
+li button[aria-current="true"]{background:linear-gradient(90deg,#1b2a8a,#0d1440)}
+.ic{width:16px;height:16px;background:var(--c);box-shadow:inset -3px -3px 0 rgba(0,0,0,.3)}
+.nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dl{text-align:right;font:500 14px var(--num)}
+.tm{text-align:right;font:500 14px var(--num)}
+.ahead{color:var(--ahead)} .behind{color:var(--behind)} .gold{color:var(--gold)}
+li.cur .nm::after{content:" ▸ in progress";color:var(--muted);font-size:12px}
+.timer{padding:10px 14px 4px;text-align:right;font:800 clamp(34px,8vw,46px)/1 var(--num);background:linear-gradient(180deg,#9dffbf,#1fb85a);-webkit-background-clip:text;background-clip:text;color:transparent}
+.timer small{font-size:.55em}
+.sub{display:flex;justify-content:space-between;padding:4px 14px 12px;font-size:13px;color:var(--muted)}
+.stats{border-top:1px solid var(--line);padding:8px 14px 12px;display:grid;gap:4px;font-size:13px}
+.stats div{display:flex;justify-content:space-between}
+.stats span:last-child{font-family:var(--num)}
+.legend{max-width:1180px;margin:14px auto 0;color:var(--muted);font-size:12px;line-height:1.6}
+</style>
+</head>
+<body>
+<div class="top"><span class="live">LIVE</span><strong>Odin's Portfolio Run</strong><span>Category: Any% (No Templates)</span><span>Platform: PC</span><span>Watching: admissions</span></div>
+<div class="layout">
+  <section class="feed" id="feed">
+    <div class="game"><canvas id="fx"></canvas><span class="clip">gameplay clip goes here</span><div class="title"><small id="seg">Segment</small><h2 id="ttl"></h2></div></div>
+    <div class="notes"><div><h3>Route</h3><p id="n1"></p></div><div><h3>Hardest trick</h3><p id="n2"></p></div><div><h3>Time save found</h3><p id="n3"></p></div></div>
+  </section>
+  <aside class="splits" aria-label="Project splits">
+    <div class="sh"><b>Portfolio Run</b><span>Any% (No Templates) · Attempt 1</span></div>
+    <ol id="ol"></ol>
+    <div class="timer" id="timer">0</div>
+    <div class="sub"><span>Run started Sep 2022</span><span id="clock"></span></div>
+    <div class="stats">
+      <div><span>Previous segment</span><span class="ahead">−1w</span></div>
+      <div><span>Sum of best</span><span>3y 1m</span></div>
+      <div><span>Engines used</span><span>Unity, Canvas</span></div>
+    </div>
+  </aside>
+</div>
+<p class="legend">Each split is a project. The time is when it shipped since I started coding. The delta compares it with my plan: green means early, red means late, gold means my best segment. Use ↑ ↓ to move between splits. All project text here is sample copy.</p>
+<script>
+const START=new Date('2022-09-01T00:00:00');
+const P=[
+ {name:'Physics Simulation',c:'#2a9d8f',t:'1y 2m',d:'−3w',k:'ahead',stack:'JavaScript',route:'Rigid bodies, springs and collisions written from scratch with no engine.',hard:'Fast objects tunnelling through each other at high speed.',save:'A fixed timestep made everything stable.'},
+ {name:'Pixel Physics',c:'#e9c46a',t:'1y 9m',d:'★ −6w',k:'gold',stack:'JavaScript · Canvas',route:'A falling-sand sandbox where every pixel is a particle with its own rules.',hard:'Keeping tens of thousands of particles at 60 fps.',save:'Typed arrays instead of objects: about 10× faster.'},
+ {name:'America Quest',c:'#5b8bd0',t:'2y 1m',d:'+2w',k:'behind',stack:'Your stack',route:'Sample: what America Quest is and what you built.',hard:'Sample: the hardest problem you hit.',save:'Sample: the trick that fixed it.'},
+ {name:'Redline',c:'#d62828',t:'2y 6m',d:'−1w',k:'ahead',stack:'Your stack',route:'Sample: what Redline is and what you built.',hard:'Sample: the hardest problem you hit.',save:'Sample: the trick that fixed it.'},
+ {name:'Elden Cube',c:'#9b72cf',t:'2y 10m',d:'+1w',k:'behind',stack:'Your stack',route:'Sample: what Elden Cube is and what you built.',hard:'Sample: the hardest problem you hit.',save:'Sample: the trick that fixed it.'},
+ {name:'Escanor vs Mob',c:'#e76f51',t:'3y 1m',d:'−1w',k:'ahead',stack:'Unity · C#',route:'An arena brawler: one overpowered hero against an endless mob.',hard:'Hundreds of enemies on screen without frame drops.',save:'Object pooling instead of spawning and destroying.'},
+ {name:'College',c:'#ffffff',t:'—',d:'',k:'',cur:true,stack:'You',route:'The next segment. This is where you come in.',hard:'Picking just one school to start the next split.',save:'Still routing it.'}
+];
+const ol=document.getElementById('ol'); let sel=5;
+ol.innerHTML=P.map((p,i)=>`<li class="${p.cur?'cur':''}"><button data-i="${i}"><span class="ic" style="--c:${p.c}"></span><span class="nm">${p.name}</span><span class="dl ${p.k}">${p.d}</span><span class="tm">${p.t}</span></button></li>`).join('');
+const btns=[...ol.querySelectorAll('button')];
+btns.forEach(b=>b.onclick=()=>pick(+b.dataset.i));
+function pick(i){sel=i;const p=P[i];
+  btns.forEach((b,j)=>b.setAttribute('aria-current',j===i));
+  document.getElementById('feed').style.setProperty('--c',p.c);
+  document.getElementById('seg').textContent=`Split ${i+1} of ${P.length} · ${p.stack}`;
+  document.getElementById('ttl').textContent=p.name;
+  n1.textContent=p.route; n2.textContent=p.hard; n3.textContent=p.save;}
+addEventListener('keydown',e=>{if(e.key==='ArrowDown'){pick((sel+1)%P.length);e.preventDefault()} if(e.key==='ArrowUp'){pick((sel+P.length-1)%P.length);e.preventDefault()}});
+pick(sel);
+const timer=document.getElementById('timer'), clock=document.getElementById('clock');
+function tick(){
+  const ms=Date.now()-START, d=Math.floor(ms/864e5), r=ms%864e5;
+  const h=Math.floor(r/36e5), m=Math.floor(r%36e5/6e4), s=Math.floor(r%6e4/1e3), cs=Math.floor(r%1e3/10);
+  const pad=n=>String(n).padStart(2,'0');
+  timer.innerHTML=`${d.toLocaleString()}d ${pad(h)}:${pad(m)}:${pad(s)}<small>.${pad(cs)}</small>`;
+  clock.textContent=`Day ${d+1}`;
+}
+// background feed: drifting speed lines in the split's color
+const cv=document.getElementById('fx'), g=cv.getContext('2d'); let lines=[];
+function size(){cv.width=cv.clientWidth;cv.height=cv.clientHeight;lines=Array.from({length:40},()=>({x:Math.random()*cv.width,y:Math.random()*cv.height,v:2+Math.random()*8,l:20+Math.random()*120}));}
+addEventListener('resize',size); size();
+const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+function loop(){ tick();
+  g.clearRect(0,0,cv.width,cv.height); g.strokeStyle=P[sel].c; g.globalAlpha=.35;
+  for(const L of lines){ if(!reduce)L.x-=L.v; if(L.x+L.l<0){L.x=cv.width;L.y=Math.random()*cv.height;}
+    g.lineWidth=L.v/4; g.beginPath(); g.moveTo(L.x,L.y); g.lineTo(L.x+L.l,L.y); g.stroke(); }
+  g.globalAlpha=1; requestAnimationFrame(loop); }
+loop();
+</script>
+</body>
+</html>

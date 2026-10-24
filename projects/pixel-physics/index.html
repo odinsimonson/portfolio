@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pixel Physics · Odin Simonson</title>
+<meta name="description" content="Odin Simonson: student, game developer and physics nerd. A retro terminal portfolio with a falling-sand sandbox, projects and resume.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Pixel Physics · Odin Simonson">
+<meta property="og:description" content="Game dev, simulations and a falling-sand sandbox you can play with.">
+<meta property="og:url" content="https://odinsimonson.com/projects/pixel-physics/">
+<meta name="theme-color" content="#140d04">
+<link rel="icon" href="../../assets/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=VT323&family=Silkscreen:wght@700&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
+<link rel="stylesheet" href="../../assets/style.css">
+</head>
+<body>
+<div class="shell">
+  <div id="left">
+  <section id="world" aria-label="Sandbox">
+    <canvas id="sand"></canvas>
+    <div class="wtop"><span><b>~/sandbox</b></span><button class="tbtn" id="wclose">[ × close sandbox ]</button></div>
+    <div id="crates"></div>
+    <div class="whint">drag &amp; throw crates · hold to pour · right-click to erase · tap a crate to open it</div>
+  </section>
+  <section id="resume" aria-label="Resume" hidden>
+    <div class="tbar"><span>odin@portfolio: ~/resume.txt</span><button class="tbtn" id="rclose">[ × close resume ]</button></div>
+    <div class="rin"><div class="rcol">
+      <div><div class="dim">game dev · simulations · student</div><h1>ODIN</h1><div class="dim">you@example.com · github.com/your-handle · your city</div></div>
+      <div class="rsec"><h2>## education</h2>
+        <div class="rrow"><b>Your High School</b><span class="dim">20XX – 2027</span></div>
+        <p>GPA x.xx · relevant classes: AP Computer Science, Physics, Calculus</p></div>
+      <div class="rsec"><h2>## projects</h2><div id="rproj" style="display:grid;gap:8px"></div></div>
+      <div class="rsec"><h2>## skills</h2>
+        <div class="rrow"><span>languages</span><span class="hi">C#, JavaScript, HTML/CSS</span></div>
+        <div class="rrow"><span>tools</span><span class="hi">Unity, Canvas, Git</span></div>
+        <div class="rrow"><span>topics</span><span class="hi">physics sims, cellular automata, game feel</span></div></div>
+      <div class="rsec"><h2>## experience</h2>
+        <div class="rrow"><b>Role or club</b><span class="dim">20XX – now</span></div>
+        <ul><li>What you did, with a number if you can.</li><li>A second thing you are proud of.</li></ul></div>
+      <div class="rsec"><h2>## awards</h2><ul><li>Award, competition or game jam placing (year)</li></ul></div>
+      <p class="dim" style="margin:0">Everything on this resume is placeholder text. Swap in your own.</p>
+    </div></div>
+  </section>
+  </div>
+  <section id="term">
+    <div class="tbar"><span>odin@portfolio: ~ — tty1</span><button class="tbtn" id="skip">[ skip the fun ]</button></div>
+    <div id="scr"><div id="out"></div><label class="row" id="prompt" hidden><span>odin@portfolio:~$</span><input id="cmd" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Command"></label></div>
+    <div class="chips" id="chips"></div>
+  </section>
+</div>
+
+<div class="page" id="page" hidden>
+  <div class="tbar"><span id="ppath">~/projects</span><button class="tbtn" id="pback">[ esc ] back</button></div>
+  <div class="pin"><div class="col" id="pbody"></div></div>
+</div>
+
+<div class="plain" id="plain" hidden>
+  <div class="col">
+    <div class="ptop"><button id="fun">← Back to the fun</button><button id="pmode">☀ Light mode</button></div>
+    <h1>Odin</h1>
+    <p class="lead">Student, game developer and physics nerd. I build games and simulations, mostly from scratch, because I want to know how every pixel moves.</p>
+    <div id="plist" style="display:grid;gap:22px"></div>
+    <article><h2>Contact</h2><p>you@example.com · github.com/your-handle</p></article>
+    <p class="note">Project text is sample copy for now.</p>
+  </div>
+</div>
+<noscript><div style="padding:24px;font:16px/1.5 system-ui,sans-serif;color:#ffe2a0;background:#140d04">This portfolio is interactive and needs JavaScript. Odin Simonson: student, game developer and physics nerd.</div></noscript>
+<script src="../../assets/app.js"></script>
+</body>
+</html>
