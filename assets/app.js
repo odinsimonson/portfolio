@@ -390,8 +390,13 @@ function setGrav(v){
     for(let k=0;k<W*H;k++){const t=grid[k];if(!t||STATIC[t])continue;
       VX[k]=(Math.random()-.5)*.5; VY[k]=was*(.1+Math.random()*.3)+(Math.random()-.5)*.3;}
 }
+// The name is drawn with the blocky Silkscreen font, so the sandbox waits for it (at most 3s) rather than
+// stamping the name in a fallback font.
+let fontReady=false;
+(document.fonts&&document.fonts.load?document.fonts.load('700 40px Silkscreen'):Promise.resolve()).catch(()=>{}).then(()=>{fontReady=true;});
+setTimeout(()=>{fontReady=true;},3000);
 function initWorld(restamp){
-  const r=world.getBoundingClientRect(); if(r.width<60||r.height<60)return;
+  const r=world.getBoundingClientRect(); if(!fontReady||r.width<60||r.height<60)return;
   W=Math.ceil(r.width/CELL); H=Math.ceil(r.height/CELL);
   cv.width=W; cv.height=H;
   grid=new Uint8Array(W*H); col=new Uint8Array(W*H); mask=new Uint8Array(W*H); moved=new Uint8Array(W*H);
@@ -450,11 +455,17 @@ function buoy(c,k,t){
   const g=grav, x0=Math.max(0,Math.floor(c.x/CELL)), x1=Math.min(W-1,Math.ceil((c.x+c.w)/CELL)-1);
   const yb=Math.max(0,Math.min(H-1,Math.floor((g>0?c.y+c.h:c.y)/CELL))); // row at the crate's leading edge
   const inY=y=>y>=0&&y<H;
-  let surf=-1,type=0;
-  for(const sx of [x0-1,x0-2,x1+1,x1+2]){
+  // surface height of the liquid on one side of the crate (-1 if none)
+  const side=cols=>{let s=-1,t=0;for(const sx of cols){
     if(!inX(sx)||!liquidAt(yb*W+sx))continue;
     let y=yb; while(inY(y-g)&&liquidAt((y-g)*W+sx))y-=g;
-    if(surf<0||y*g<surf*g){surf=y;type=liquidAt(y*W+sx);}
+    if(s<0||y*g<s*g){s=y;t=liquidAt(y*W+sx);}}return [s,t];};
+  const [sL,tL]=side([x0-1,x0-2]), [sR,tR]=side([x1+1,x1+2]), wallL=x0<=0, wallR=x1>=W-1;
+  // only a pool lifts a crate: liquid on both sides, or one side and a wall. A stream falling past one side doesn't.
+  let surf=-1,type=0;
+  if((sL>=0||wallL)&&(sR>=0||wallR)&&(sL>=0||sR>=0)){
+    if(sL<0){surf=sR;type=tR;} else if(sR<0){surf=sL;type=tL;}
+    else if(sL*g>sR*g){surf=sL;type=tL;} else {surf=sR;type=tR;} // the shallower side decides
   }
   if(surf<0){ // nothing beside it, so check whether it's resting on a pool
     const cx=Math.min(W-1,Math.max(0,((c.x+c.w/2)/CELL)|0));
@@ -468,6 +479,18 @@ function buoy(c,k,t){
   c.vy+=Math.sin(t/(lava?950:420)+c.p.id.length)*(lava?.025:.06)*k;     // gentle bob
   c.vy*=Math.pow(lava?.86:.93,k); c.vx*=Math.pow(lava?.9:.97,k);
 }
+// Crates land on solid particles (sand, rock, plants, the name) instead of sinking through and crushing them:
+// if the crate's leading row has sunk into enough of them, lift it back out a row at a time.
+const SOLID=new Uint8Array(16); for(const t of [1,2,5,7,8,9,10,11,12])SOLID[t]=1;
+function landOnParticles(c){
+  if(!worldReady||!grav||c.drag)return;
+  const x0=Math.max(0,Math.floor(c.x/CELL)), x1=Math.min(W,Math.ceil((c.x+c.w)/CELL)), need=Math.max(2,(x1-x0)*.2);
+  const solidRow=y=>{if(y<0||y>=H)return false;let n=0;for(let x=x0;x<x1;x++)if(SOLID[grid[y*W+x]])n++;return n>=need;};
+  let landed=false;
+  if(grav>0){let b=Math.ceil((c.y+c.h)/CELL)-1;for(let i=0;i<6&&solidRow(b);i++,b--){c.y=b*CELL-c.h;landed=true;}if(landed&&c.vy>0)c.vy=0;}
+  else{let t=Math.floor(c.y/CELL);for(let i=0;i<6&&solidRow(t);i++,t++){c.y=(t+1)*CELL;landed=true;}if(landed&&c.vy<0)c.vy=0;}
+  if(landed)c.vx*=.85;
+}
 // crates never leave the box: all four edges are walls
 function walls(c,fw,fh){
   if(c.y>fh-c.h){c.y=fh-c.h;c.vy=-Math.abs(c.vy)*.3;if(grav>0){c.vx*=.85;if(Math.abs(c.vy)<1.2)c.vy=0;}}
@@ -476,16 +499,18 @@ function walls(c,fw,fh){
 }
 function physics(k){
   const fw=world.clientWidth, fh=world.clientHeight, now=performance.now();
-  for(const c of crates){
+  const live=crates.filter(c=>!c.hidden); // crates inside the tsunami sit out
+  for(const c of live){
     if(!c.drag){
       if(grav)c.vy+=.6*grav*k; else {c.vx*=.995;c.vy=c.vy*.995+(Math.random()-.5)*.08;}
       buoy(c,k,now);
       c.x+=c.vx*k;c.y+=c.vy*k;if(grav)c.vx*=Math.pow(.99,k);
+      landOnParticles(c);
     }
     walls(c,fw,fh);
   }
-  for(let it=0;it<4;it++)for(let i=0;i<crates.length;i++)for(let j=i+1;j<crates.length;j++){
-    const a=crates[i],b=crates[j];
+  for(let it=0;it<4;it++)for(let i=0;i<live.length;i++)for(let j=i+1;j<live.length;j++){
+    const a=live[i],b=live[j];
     const ox=Math.min(a.x+a.w,b.x+b.w)-Math.max(a.x,b.x), oy=Math.min(a.y+a.h,b.y+b.h)-Math.max(a.y,b.y);
     if(ox<=0||oy<=0)continue;
     if(ox<oy){const s=a.x<b.x?-1:1;if(!a.drag)a.x+=s*ox/(b.drag?1:2);if(!b.drag)b.x-=s*ox/(a.drag?1:2);const t=a.vx;a.vx=b.vx*.6;b.vx=t*.6;}
@@ -500,51 +525,54 @@ function physics(k){
     c.el.style.transform=`translate(${c.x}px,${c.y}px) rotate(${c.rot}deg)`;
   }
 }
-// Crates displace what they overlap like a body sinking into a pool: each grain goes to the nearest free cell
-// beside the crate on its own row, then the row above, and so on, so levels rise evenly instead of spiking.
+// Crates displace what they overlap without teleporting anything. A grain may only leave through an edge within
+// MAXD cells of it, and the line of particles in front of it shifts one cell to make room, like being pushed. The
+// way the crate is moving goes first (so whatever sits on a rising crate rides up with it, and a pile gets
+// bulldozed), then the nearest edges. Through a side edge the line can also be pushed upward along the crate, which
+// is how a pile heaps up in front of it or water rises beside it. If nothing is close and open, the grain stays
+// hidden behind the crate until it moves away.
 function rasterCrates(){
   mask.fill(0);
-  const R=crates.map(c=>({cr:c,x0:Math.max(0,Math.floor(c.x/CELL)),x1:Math.min(W,Math.ceil((c.x+c.w)/CELL)),
-    y0:Math.max(0,Math.floor(c.y/CELL)),y1:Math.min(H,Math.ceil((c.y+c.h)/CELL))}));
+  const R=[];
+  for(const c of crates)if(!c.hidden)R.push({cr:c,x0:Math.max(0,Math.floor(c.x/CELL)),x1:Math.min(W,Math.ceil((c.x+c.w)/CELL)),
+    y0:Math.max(0,Math.floor(c.y/CELL)),y1:Math.min(H,Math.ceil((c.y+c.h)/CELL))});
   for(const r of R)for(let y=r.y0;y<r.y1;y++)if(r.x1>r.x0)mask.fill(1,y*W+r.x0,y*W+r.x1);
-  const dir=grav<0?1:-1;
-  for(const r of R)for(let y=r.y0;y<r.y1;y++)for(let x=r.x0;x<r.x1;x++){
-    const k=y*W+x,t=grid[k]; if(!t||STATIC[t])continue;
-    const c=col[k]; grid[k]=0;
-    if(grav)shove(t,c,x,y,r,dir); else pushOut(t,c,x,y,r);
+  for(const r of R){
+    const mvx=r.cr.vx/CELL, mvy=r.cr.vy/CELL, moving=Math.abs(mvx)>.15||Math.abs(mvy)>.15;
+    const md=moving?(Math.abs(mvy)>=Math.abs(mvx)?[0,Math.sign(mvy)]:[Math.sign(mvx),0]):null;
+    // handle the leading edge first, so a deeper cell pushes into the line its neighbor just made
+    const up=md&&md[1]<0, left=md&&md[0]<0;
+    for(let i=0;i<r.y1-r.y0;i++){const y=up?r.y0+i:r.y1-1-i;
+      for(let jx=0;jx<r.x1-r.x0;jx++){const x=left?r.x0+jx:r.x1-1-jx, k=y*W+x, t=grid[k];
+        if(t&&!STATIC[t])displace(k,x,y,r,md,mvx,mvy);}}
   }
 }
-// Gravity off: a grain leaves through the crate's nearest edge. If the way is crowded, the line of particles in
-// front of it shifts outward by one cell (like being pushed), and everything picks up some of the crate's speed.
-function pushOut(t,c,x,y,r){
-  const cand=[[x-r.x0,-1,0],[r.x1-1-x,1,0],[y-r.y0,0,-1],[r.y1-1-y,0,1]].sort((a,b)=>a[0]-b[0]);
-  const vx=Math.max(-1,Math.min(1,r.cr.vx/CELL*.5)), vy=Math.max(-1,Math.min(1,r.cr.vy/CELL*.5));
-  for(const [,dx,dy] of cand){
-    const sx=dx<0?r.x0-1:dx>0?r.x1:x, sy=dy<0?r.y0-1:dy>0?r.y1:y;
+const MAXD=3;
+function displace(k,x,y,r,md,mvx,mvy){
+  const dl=x-r.x0, dr=r.x1-1-x, dt=y-r.y0, db=r.y1-1-y;
+  const opts=[]; // [preference, exit x, exit y, push dx, push dy]
+  const side=(d,ex,dx)=>{opts.push([d,ex,y,dx,0]); if(grav)opts.push([d+.5,ex,y,0,-grav]);};
+  if(dl<=MAXD)side(dl,r.x0-1,-1);
+  if(dr<=MAXD)side(dr,r.x1,1);
+  if(dt<=MAXD)opts.push([dt,x,r.y0-1,0,-1]);
+  if(db<=MAXD)opts.push([db,x,r.y1,0,1]);
+  if(md){const d=md[0]<0?dl:md[0]>0?dr:md[1]<0?dt:db;
+    if(d<=MAXD)opts.push([-1,md[0]<0?r.x0-1:md[0]>0?r.x1:x,md[1]<0?r.y0-1:md[1]>0?r.y1:y,md[0],md[1]]);}
+  opts.sort((a,b)=>a[0]-b[0]);
+  for(const [,sx,sy,dx,dy] of opts){
     let n=0,ok=false;
-    for(let nx=sx,ny=sy;n<40;n++,nx+=dx,ny+=dy){
+    for(let nx=sx,ny=sy;n<32;n++,nx+=dx,ny+=dy){
       if(!inX(nx)||ny<0||ny>=H)break;
       const j=ny*W+nx,g=grid[j]; if(mask[j]||STATIC[g])break;
       if(!g){ok=true;break;}
     }
     if(!ok)continue;
     for(let m=n;m>0;m--){const to=(sy+dy*m)*W+sx+dx*m, from=(sy+dy*(m-1))*W+sx+dx*(m-1);
-      grid[to]=grid[from];col[to]=col[from];VX[to]=VX[from]+dx*.2+vx*.3;VY[to]=VY[from]+dy*.2+vy*.3;}
-    const j=sy*W+sx; grid[j]=t;col[j]=c;VX[j]=vx+dx*.3;VY[j]=vy+dy*.3;
+      grid[to]=grid[from];col[to]=col[from];life[to]=life[from];
+      if(!grav){VX[to]=VX[from]+dx*.2+mvx*.15;VY[to]=VY[from]+dy*.2+mvy*.15;}}
+    const j=sy*W+sx; grid[j]=grid[k];col[j]=col[k];life[j]=life[k];grid[k]=0;
+    VX[j]=grav?0:mvx*.5+dx*.3; VY[j]=grav?0:mvy*.5+dy*.3;
     return;
-  }
-}
-function put(j,t,c){grid[j]=t;col[j]=c;VX[j]=0;VY[j]=0;}
-function shove(t,c,x,y,r,dir){
-  const first=(x-r.x0)<(r.x1-1-x)?-1:1;
-  for(let yy=y,n=0;yy>=0&&yy<H&&n<160;yy+=dir,n++){
-    const row=yy*W;
-    if(dir<0?yy<r.y0:yy>=r.y1){const j=row+x;if(!grid[j]&&!mask[j]){put(j,t,c);return;}}
-    for(const s of [first,-first])
-      for(let xx=s<0?r.x0-1:r.x1,m=0;xx>=0&&xx<W&&m<100;xx+=s,m++){
-        const j=row+xx; if(mask[j]||STATIC[grid[j]])break;
-        if(!grid[j]){put(j,t,c);return;}
-      }
   }
 }
 const inX=x=>x>=0&&x<W;
@@ -662,43 +690,55 @@ function draw(){
       g[o]=255;g[o+1]=110;g[o+2]=30;g[o+3]=210;continue;}
     g[o+3]=0;
     if(t){const p=PAL[t],c=p[col[k]%p.length];d[o]=c[0];d[o+1]=c[1];d[o+2]=c[2];d[o+3]=255;}else d[o+3]=0;}
-  if(wave&&wave.stage===0)drawWave(d);
+  if(wave)drawWave(d);
   ctx.putImageData(img,0,0); gctx.putImageData(gimg,0,0);
 }
-// Reset as a tsunami: a wave rolls in from the left and washes away everything it passes, flinging the
-// crates; then the crates drop back in and the name re-forms grain by grain.
-function startTsunami(){setGrav(1);pouring=false;wave={t0:performance.now(),stage:0,front:-1,L:Math.max(30,Math.round(W*.35)),cleared:0,hit:new Set()};}
+// Reset as a tsunami: a full-height wall of water sweeps left to right. Everything it reaches is washed away, and
+// right behind its tail the fresh sandbox is already back (just the name). Crates vanish into the wave and reappear
+// resting in their spots once the tail has passed.
+function startTsunami(){
+  setGrav(1); pouring=false;
+  const fw=world.clientWidth, n=crates.length;
+  wave={t0:performance.now(),front:0,L:Math.max(30,Math.round(W*.3)),name:new Uint8Array(W*H),
+    spots:crates.map((c,i)=>Math.min(fw-c.w,Math.max(0,(i+.5)/n*fw-c.w/2)))};
+  for(const k of nameCells())wave.name[k]=1;
+}
+function restoreCrate(c,i){
+  c.hidden=false; c.x=wave.spots[i]; c.y=world.clientHeight-c.h; c.vx=c.vy=c.rot=0; c.el.style.visibility='';
+}
 function waveStep(now){
-  if(wave.stage===0){
-    const p=Math.min(1,(now-wave.t0)/1600), e=p*p*(3-2*p);
-    wave.front=-wave.L+(W+2*wave.L)*e;
-    const to=Math.min(W,Math.floor(wave.front));
-    for(let x=wave.cleared;x<to;x++)for(let y=0;y<H;y++)grid[y*W+x]=0;
-    wave.cleared=Math.max(wave.cleared,to);
-    for(const c of crates)if(!wave.hit.has(c)&&(c.x+c.w/2)/CELL<wave.front){
-      wave.hit.add(c);c.drag=false;c.vx+=16+Math.random()*10;c.vy-=8+Math.random()*8;}
-    if(p>=1){grid.fill(0);wave.stage=1;wave.t1=now;wave.cells=nameCells().sort(()=>Math.random()-.5);wave.done=0;dropCrates();}
-  }else{
-    const q=Math.min(1,(now-wave.t1)/800), n=Math.floor(wave.cells.length*q);
-    for(let i=wave.done;i<n;i++){const k=wave.cells[i];grid[k]=2;col[k]=(Math.random()*3)|0;}
-    wave.done=n; if(q>=1)wave=null;
+  const p=Math.min(1,(now-wave.t0)/1800), e=p<.5?2*p*p:1-2*(1-p)*(1-p);
+  const f=wave.front=(W+wave.L)*e;
+  const reached=Math.max(0,Math.min(W,Math.ceil(f))), rebuilt=Math.max(0,Math.min(W,Math.floor(f-wave.L*.8)));
+  // re-applied every frame, so nothing can drift or flow back into the washed area
+  for(let x=0;x<reached;x++){const fresh=x<rebuilt;
+    for(let y=0;y<H;y++){const k=y*W+x;
+      if(fresh&&wave.name[k]){if(grid[k]!==2){grid[k]=2;col[k]=(Math.random()*3)|0;}}
+      else grid[k]=0;}}
+  crates.forEach((c,i)=>{
+    if(!c.hidden&&!c.back&&(c.x+c.w/2)/CELL<f){c.hidden=true;c.drag=false;c.el.style.visibility='hidden';}
+    if(c.hidden&&(wave.spots[i]+c.w)/CELL<rebuilt){restoreCrate(c,i);c.back=true;}
+  });
+  if(p>=1){
+    for(let k=0;k<W*H;k++){if(wave.name[k]){if(grid[k]!==2){grid[k]=2;col[k]=(Math.random()*3)|0;}}else grid[k]=0;}
+    crates.forEach((c,i)=>{if(c.hidden)restoreCrate(c,i);c.back=false;});
+    wave=null;
   }
 }
 function drawWave(d){
-  const f=wave.front, L=wave.L, peak=H*.72, FOAM=[235,245,255];
+  const f=wave.front, L=wave.L, FOAM=[235,245,255];
   const put=(x,y,c)=>{if(x<0||x>=W||y<0||y>=H)return;const o=(y*W+x)*4;d[o]=c[0];d[o+1]=c[1];d[o+2]=c[2];d[o+3]=255;};
-  // body: steep face at the front, a tall flat-ish back, then a long tail
+  const water=(x,y)=>PAL[3][(x+y+(frame>>1))%3];
+  // the wall: full height, rippling along the top, tapering only at the very back
   for(let x=Math.max(0,Math.floor(f-L));x<=Math.min(W-1,Math.floor(f));x++){
-    const u=(f-x)/L, s=u<.08?Math.pow(u/.08,.6):u<.55?1-(u-.08)*.25:.88*Math.pow(1-(u-.55)/.45,1.3);
-    const h=Math.round(s*peak+Math.sin(x*.35+frame*.25)*2), top=H-h;
-    for(let y=Math.max(0,top);y<H;y++)put(x,y,y<top+2||(f-x<1.5&&y<top+h*.5)?FOAM:PAL[3][(x+y+(frame>>1))%3]);
+    const u=(f-x)/L, s=u<.7?1:1-Math.pow((u-.7)/.3,1.5);
+    const top=u<.7?Math.round((Math.sin(x*.4+frame*.3)+1)*1.5):H-Math.round(s*H);
+    for(let y=Math.max(0,top);y<H;y++)put(x,y,y<top+2||f-x<2?FOAM:water(x,y));
   }
-  // breaking lip: the crest curls forward over the face and droops
-  const crest=Math.round(H-peak), fx=Math.floor(f);
-  for(let i=1;i<=Math.round(L*.18);i++){
-    const y0=crest+Math.round(i*i*.12);
-    for(let t=0;t<4;t++)put(fx+i,y0+t,t<2?FOAM:PAL[3][(i+t)%3]);
-  }
+  // the breaking lip: curls forward and down from the top of the face, attached to it
+  const fx=Math.floor(f), len=Math.round(L*.22);
+  for(let i=0;i<=len;i++){const y0=Math.round(i*i*.09);
+    for(let t=0;t<5;t++)put(fx+i,y0+t,t<2?FOAM:water(fx+i,y0+t));}
 }
 function crumbleAt(cx,cy,r){for(let y=cy-r;y<=cy+r;y++)for(let x=cx-r;x<=cx+r;x++){
   if(!inX(x)||y<0||y>=H||(x-cx)**2+(y-cy)**2>r*r)continue;const k=y*W+x;
@@ -736,7 +776,6 @@ function loop(now){
 requestAnimationFrame(loop);
 
 /* ---------- boot ---------- */
-if(document.fonts&&document.fonts.load)document.fonts.load('700 40px Silkscreen').catch(()=>{});
 setChips();
 const startRoute=applyRoute();
 const known=startRoute===''||currentPath()===startRoute;
