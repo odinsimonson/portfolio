@@ -21,9 +21,10 @@
   <div id="left">
   <section id="world" aria-label="Sandbox">
     <canvas id="sand"></canvas>
+    <canvas id="glow"></canvas>
     <div class="wtop"><span><b>~/sandbox</b></span><button class="tbtn" id="wclose">[ × close sandbox ]</button></div>
     <div id="crates"></div>
-    <div class="whint">drag &amp; throw crates · hold to pour · right-click to erase · tap a crate to open it</div>
+    <div class="whint">click a crate to see the project · drag &amp; throw them · hold to pour · right-click to erase</div>
   </section>
   <section id="resume" aria-label="Resume" hidden>
     <div class="tbar"><span>odin@portfolio: ~/resume.txt</span><button class="tbtn" id="rclose">[ × close resume ]</button></div>
@@ -46,7 +47,7 @@
   </section>
   </div>
   <section id="term">
-    <div class="tbar"><span>odin@portfolio: ~ — tty1</span><button class="tbtn" id="skip">[ skip the fun ]</button></div>
+    <div class="tbar"><span>odin@portfolio: ~ — tty1</span><button class="tbtn simple" id="skip">Simple Mode<small>skip the fun</small></button></div>
     <div id="scr"><div id="out"></div><label class="row" id="prompt" hidden><span>odin@portfolio:~$</span><input id="cmd" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Command"></label></div>
     <div class="chips" id="chips"></div>
   </section>

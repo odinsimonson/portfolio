@@ -14,9 +14,14 @@ const hex=h=>[1,3,5].map(i=>parseInt(h.slice(i,i+2),16));
 const mix=(a,b,t)=>a.map((v,i)=>Math.round(v+(b[i]-v)*t));
 const rgb=c=>`rgb(${c.join(',')})`;
 const WHITE=[255,255,255], BLACK=[0,0,0];
-// cell types: 1 sand, 2 name, 3 water, 4 lava, 5 rock, 6 steam, 7 confetti
-const PAL={3:[[61,139,253],[86,160,255],[52,120,230]],4:[[255,90,31],[255,140,40],[230,60,20]],5:[[96,96,110],[78,78,90],[112,110,124]],
-  6:[[225,228,236],[205,210,222],[240,242,248]],7:[[255,82,82],[255,193,7],[76,217,100],[64,156,255],[186,104,255],[255,120,200],[255,255,255]]};
+// cell types: 1 sand, 2 name, 3 water, 4 lava, 5 rock, 6 steam, 7 confetti,
+// 8 seed, 9 stem, 10 petal, 11 leaf, 12 flower center
+const PETALS=[[255,105,180],[255,80,80],[255,210,60],[180,120,255],[255,255,255],[255,150,60],[100,190,255]];
+const PAL={3:[[61,139,253],[86,160,255],[52,120,230]],4:[[255,90,31],[255,140,40],[230,60,20],[255,190,70]],5:[[96,96,110],[78,78,90],[112,110,124]],
+  6:[[225,228,236],[205,210,222],[240,242,248]],7:[[255,82,82],[255,193,7],[76,217,100],[64,156,255],[186,104,255],[255,120,200],[255,255,255]],
+  8:[[150,190,90],[130,170,70]],9:[[46,140,60],[38,120,50],[56,160,70]],10:PETALS,11:[[90,200,90],[70,180,80]],12:[[255,220,70],[255,200,40]]};
+// cells that never move on their own: the name, rock, and grown plants
+const STATIC=new Uint8Array(16); for(const t of [2,5,9,10,11,12])STATIC[t]=1;
 let theme='amber';
 function setFavicon(c,bg){
   let l=document.querySelector('link[rel="icon"]');
@@ -47,15 +52,15 @@ scr.addEventListener('scroll',()=>{stick=scr.scrollHeight-scr.scrollTop-scr.clie
 const pin=new ResizeObserver(()=>{if(stick)scr.scrollTop=scr.scrollHeight;});
 pin.observe(scr); pin.observe(out);
 const L=(c,label)=>`<span class="lnk" data-cmd="${c}">${label||c}</span>`;
-const sandboxHelp=()=>print(`<span class="dim">in the sandbox: brush &lt;sand|water|lava|rock|eraser&gt;, ${L('rain')}, gravity &lt;on|off|flip&gt;, ${L('quake')}, ${L('crumble')}, ${L('sweep')}, ${L('exit')}
-right-click and drag to erase.</span>`);
+const sandboxHelp=()=>print(`<span class="dim">in the sandbox: brush &lt;sand|water|lava|rock|plant|eraser&gt;, ${L('rain')}, gravity &lt;on|off|flip&gt;, ${L('quake')}, ${L('crumble')}, ${L('sweep')}, ${L('reset')}, ${L('exit')}
+right-click and drag to erase. pick a brush from the buttons below.</span>`);
 const pad=(s,n)=>s+' '.repeat(Math.max(1,n-s.length));
 function find(a){if(!a)return null;a=a.toLowerCase();
   return P.find(p=>p.id===a||p.name.toLowerCase()===a)||(()=>{const m=P.filter(p=>p.id.startsWith(a));return m.length===1?m[0]:null})();}
 const sandboxOpen=()=>view()==='sandbox';
 async function ensureSandbox(){if(!sandboxOpen()){print('opening the sandbox...','dim');openSandbox();await sleep(400);}}
 let busy=false, brush=1;
-const MAT={sand:1,water:3,lava:4,rock:5,erase:0,eraser:0};
+const MAT={sand:1,water:3,lava:4,rock:5,plant:8,erase:0,eraser:0};
 const C={
   help(){print(`<span class="hi">available commands</span>
   <span class="hi">✦ ${L('run sandbox')}</span>    open the sandbox
@@ -68,7 +73,7 @@ const C={
   ${L('contact')}          how to reach me
   ${L('clear')}            clear the screen
   ${L('reset')}            clear, or reset the sandbox
-<span class="dim">in the sandbox: brush &lt;sand|water|lava|rock|eraser&gt;, ${L('rain')}, gravity &lt;on|off|flip&gt;, ${L('quake')}, ${L('crumble')}, ${L('sweep')}, ${L('exit')}
+<span class="dim">in the sandbox: brush &lt;sand|water|lava|rock|plant|eraser&gt;, ${L('rain')}, gravity &lt;on|off|flip&gt;, ${L('quake')}, ${L('crumble')}, ${L('sweep')}, ${L('exit')}
 right-click and drag to erase.
 tip: click any underlined word. tab completes, ↑ ↓ for history.
 some commands are hidden.</span>`);},
@@ -96,8 +101,10 @@ because I want to know how every pixel moves.
 <span class="dim">(sample bio, swap in your own)</span>`);},
   contact(){print(`email   you@example.com\ngithub  github.com/your-handle\n<span class="dim">(placeholders)</span>`);},
   clear(){out.innerHTML='';},
-  async brush(a){await ensureSandbox();if(!(a in MAT))return print('usage: brush &lt;sand|water|lava|rock|eraser&gt;','err');brush=MAT[a];
-    print(brush===0?'brush: eraser. hold the mouse in the sandbox to erase':`brush: ${a}. hold the mouse in the sandbox to pour (right-click erases)`,'dim');},
+  async brush(a){await ensureSandbox();if(!(a in MAT))return print('usage: brush &lt;sand|water|lava|rock|plant|eraser&gt;','err');brush=MAT[a];setChips();
+    print(brush===0?'brush: eraser. hold the mouse in the sandbox to erase'
+      :brush===8?'brush: plant. drop seeds on the ground and watch them grow (water helps)'
+      :`brush: ${a}. hold the mouse in the sandbox to pour (right-click erases)`,'dim');},
   async rain(a){await ensureSandbox();const m=a&&a in MAT&&MAT[a]?MAT[a]:(brush||1);rainType=m;rainUntil=performance.now()+4500;print(`it's raining ${Object.keys(MAT).find(k=>MAT[k]===m)}`,'dim');},
   async gravity(a){await ensureSandbox();
     if(a==='off'){setGrav(0);print('gravity off. everything floats','dim');}
@@ -107,7 +114,7 @@ because I want to know how every pixel moves.
   async quake(){await ensureSandbox();quake();print('the ground shakes','dim');},
   async crumble(){await ensureSandbox();crumbleAll();print('the name crumbles','dim');},
   async sweep(){await ensureSandbox();sweep();print('sand swept away','dim');},
-  reset(){if(!sandboxOpen())return C.clear();setGrav(1);initWorld(true);print('sandbox reset','dim');},
+  reset(){if(!sandboxOpen())return C.clear();if(wave)return;startTsunami();print('🌊 tsunami incoming...','hi');},
   resume(){if(view()==='resume')return print('the resume is already open, look left ←','dim');
     print('unfolding resume.txt ...','hi');openView('resume');
     print(`<span class="dim">scroll it on the left. ${L('exit')} closes it, ${L('run sandbox')} swaps to the sandbox.</span>`);},
@@ -162,10 +169,142 @@ document.addEventListener('click',e=>{
 });
 function setChips(){
   const v=view();
-  const list=v==='sandbox'?['brush sand','brush water','brush lava','brush rock','rain','gravity flip','quake','exit']
-    :v==='resume'?['✦ run sandbox','ls','help','exit']:['✦ run sandbox','help','ls','resume','themes','secret'];
-  $('chips').innerHTML=list.map(c=>`<button class="tbtn" data-cmd="${c.replace('✦ ','')}">${c}</button>`).join('');
+  const B=(cmd,label,fx,extra='')=>`<button class="tbtn${fx?' fx '+fx:''}${extra}" data-cmd="${cmd}"${fx?` data-fx="${fx}"`:''}>${fx?`<span class="fxl">${label}</span>`:label}</button>`;
+  let html;
+  if(v==='sandbox'){
+    const br=m=>B('brush '+m,m,m,MAT[m]===brush?' on':'');
+    html=`<span class="clabel">brushes</span>${br('sand')}${br('water')}${br('lava')}${br('rock')}${br('plant')}`
+      +`<span class="clabel">actions</span>${B('rain','rain')}${B('gravity flip','flip gravity')}${B('quake','quake')}${B('reset','⟲ reset')}${B('exit','exit')}`;
+  }else{
+    const rest=v==='resume'?['ls','help','exit']:['help','ls','resume','themes','secret'];
+    html=B('run sandbox','✦ run sandbox','sandbox',' big')+rest.map(c=>B(c,c)).join('');
+  }
+  $('chips').innerHTML=html; mountFX();
 }
+
+/* ---------- button effects: each material button holds a tiny live simulation ---------- */
+// One canvas pixel per 3 screen pixels, drawn behind the label at ~30 fps. "run sandbox" loops through
+// pouring sand, sloshing water and oozing lava; brush buttons show their own material.
+const FXS=3, reduceMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const FXC={water:[[52,120,230],[61,139,253],[86,160,255]],rock:[[96,96,110],[78,78,90],[112,110,124],[64,64,74]],
+  soil:[[92,64,40],[110,78,48]],grass:[[60,150,60],[80,175,70]],stem:[46,140,60],leaf:[90,200,90],center:[255,220,70]};
+let fxList=[];
+function mountFX(){
+  fxList=[...document.querySelectorAll('#chips .fx')].map(b=>{const c=document.createElement('canvas');c.className='fxc';b.prepend(c);
+    return {b,c,g:c.getContext('2d'),kind:b.dataset.fx,w:0,h:0};});
+}
+function fxInit(f){
+  f.w=Math.max(8,Math.ceil(f.b.clientWidth/FXS)); f.h=Math.max(6,Math.ceil(f.b.clientHeight/FXS));
+  f.c.width=f.w; f.c.height=f.h; f.img=f.g.createImageData(f.w,f.h);
+  f.grid=new Uint8Array(f.w*f.h); f.mv=new Uint8Array(f.w*f.h); f.shade=new Uint8Array(f.w*f.h).map(()=>Math.random()*255|0);
+  f.t0=performance.now(); f.plants=[]; f.bubbles=[]; f.done=false;
+  if(f.kind==='sand')for(let y=Math.floor(f.h*.45);y<f.h;y++)for(let x=0;x<f.w;x++)f.grid[y*f.w+x]=1;
+}
+// falling sand / flowing liquid on the button's own little grid; slosh tilts liquids one way, drain empties the bottom
+function fxStep(f,slosh,drain){
+  const w=f.w,h=f.h,gd=f.grid,mv=f.mv,sh=f.shade; mv.fill(0);
+  const mov=(a,b)=>{gd[b]=gd[a];gd[a]=0;mv[b]=1;const s=sh[a];sh[a]=sh[b];sh[b]=s;};
+  for(let y=h-1;y>=0;y--){const ltr=Math.random()<.5;
+    for(let i=0;i<w;i++){const x=ltr?i:w-1-i,k=y*w+x,t=gd[k]; if(!t||mv[k])continue;
+      if(t===4&&Math.random()<.6)continue;
+      if(y===h-1){if(drain){gd[k]=0;continue;}}
+      else{
+        const b=k+w; if(!gd[b]){mov(k,b);continue;}
+        const d=Math.random()<.5?-1:1;
+        if(x+d>=0&&x+d<w&&!gd[b+d]){mov(k,b+d);continue;}
+        if(x-d>=0&&x-d<w&&!gd[b-d]){mov(k,b-d);continue;}
+      }
+      if(t!==1){const d=slosh?(Math.random()<.75?slosh:-slosh):(Math.random()<.5?-1:1);
+        if(x+d>=0&&x+d<w&&!gd[k+d])mov(k,k+d);}
+    }
+  }
+}
+function fxPaint(f,now){
+  const d=f.img.data,n=f.w*f.h,tick=now/200|0;
+  for(let k=0;k<n;k++){const t=f.grid[k],o=k*4,s=f.shade[k];
+    const c=t===1?PAL[1][s%5]:t===3?FXC.water[(s+tick)%3]:t===4?PAL[4][(s+tick)%4]:null;
+    if(c){d[o]=c[0];d[o+1]=c[1];d[o+2]=c[2];d[o+3]=255;}else d[o+3]=0;}
+  f.g.putImageData(f.img,0,0);
+}
+function fpx(f,x,y,c){if(x<0||y<0||x>=f.w||y>=f.h)return;const o=(y*f.w+x)*4,d=f.img.data;d[o]=c[0];d[o+1]=c[1];d[o+2]=c[2];d[o+3]=255;}
+const FX={
+  sand(f,t,now){ // a shallow pile with grains trickling in and draining out, so it shimmers
+    if(Math.random()<.7)f.grid[(Math.random()*f.w)|0]=1;
+    if(Math.random()<.7)f.grid[(f.h-1)*f.w+((Math.random()*f.w)|0)]=0;
+    fxStep(f,0,false); fxPaint(f,now);
+  },
+  water(f,t){ // two overlapping sine waves make the surface ripple
+    f.img.data.fill(0);
+    for(let x=0;x<f.w;x++){
+      const top=f.h*.36+Math.sin(x*.45+t*3.2)*1.1+Math.sin(x*.17-t*1.9)*.9;
+      for(let y=Math.max(0,Math.floor(top));y<f.h;y++)
+        fpx(f,x,y,y<top+1.2?[170,215,255]:FXC.water[((x>>1)+y+Math.floor(t*5))%3]);
+    }
+    if(Math.random()<.3)fpx(f,(Math.random()*f.w)|0,Math.floor(f.h*.36),[255,255,255]);
+    f.g.putImageData(f.img,0,0);
+  },
+  lava(f,t){ // slow churning surface, with bubbles that rise and pop
+    f.img.data.fill(0);
+    for(let x=0;x<f.w;x++){
+      const top=f.h*.3+Math.sin(x*.3+t*1.1)*.9;
+      for(let y=Math.max(0,Math.floor(top));y<f.h;y++)
+        fpx(f,x,y,y<top+1?[255,200,90]:PAL[4][(f.shade[y*f.w+x]+Math.floor(t*2)+((x+y*3)>>2))%4]);
+    }
+    if(Math.random()<.06)f.bubbles.push({x:(Math.random()*f.w)|0,y:f.h-1,pop:0});
+    for(const b of f.bubbles){
+      if(b.pop){fpx(f,b.x,b.y-1,[255,240,160]);fpx(f,b.x-1,b.y,[255,220,120]);fpx(f,b.x+1,b.y,[255,220,120]);b.pop++;continue;}
+      b.y-=.25; fpx(f,b.x,Math.round(b.y),[255,235,140]);
+      if(b.y<=f.h*.3+1)b.pop=1;
+    }
+    f.bubbles=f.bubbles.filter(b=>b.pop<5);
+    f.g.putImageData(f.img,0,0);
+  },
+  rock(f){ // drawn once: speckled stone with a few cracks
+    if(f.done)return;
+    for(let y=0;y<f.h;y++)for(let x=0;x<f.w;x++){const s=f.shade[y*f.w+x];
+      fpx(f,x,y,(x*3+y*5+(s>>5))%17===0?[52,52,60]:FXC.rock[s%4]);}
+    f.g.putImageData(f.img,0,0); f.done=true;
+  },
+  plant(f,t,now){ // flowers sprout, grow and bloom, then the bed clears and they grow again
+    f.img.data.fill(0);
+    const ground=f.h-3;
+    if(!f.plants.length){const n=Math.max(2,Math.floor(f.w/7));
+      for(let i=0;i<n;i++)f.plants.push({x:Math.floor((i+.5)*f.w/n+(Math.random()*3-1)),hh:0,max:3+Math.random()*(ground-5),
+        delay:Math.random()*1.5,c:PETALS[(Math.random()*PETALS.length)|0],leaf:2+(Math.random()*3|0)});
+      f.bloomAt=0;}
+    for(let x=0;x<f.w;x++){fpx(f,x,ground,FXC.grass[(x+f.shade[x])%2]);for(let y=ground+1;y<f.h;y++)fpx(f,x,y,FXC.soil[(f.shade[y*f.w+x])%2]);}
+    let all=true;
+    for(const p of f.plants){
+      if(t>p.delay&&p.hh<p.max)p.hh=Math.min(p.max,p.hh+.12);
+      for(let i=1;i<=Math.floor(p.hh);i++){fpx(f,p.x,ground-i,FXC.stem);if(i===p.leaf)fpx(f,p.x+1,ground-i,FXC.leaf);}
+      if(p.hh>=p.max){const cy=ground-Math.floor(p.hh)-1;
+        for(const [dx,dy] of [[1,0],[-1,0],[0,-1],[0,1]])fpx(f,p.x+dx,cy+dy,p.c);fpx(f,p.x,cy,FXC.center);}
+      else all=false;
+    }
+    if(all){f.bloomAt=f.bloomAt||t; if(t-f.bloomAt>2.5){f.plants=[];f.t0=now;}}
+    f.g.putImageData(f.img,0,0);
+  },
+  sandbox(f,t,now){ // pour sand, then water (sloshing), then lava, draining between each
+    const phase=t%10.8, m=[1,3,4][Math.floor(phase/3.6)], p=phase%3.6;
+    if(p<2.2){const x=Math.round(f.w/2+Math.sin(t*2.3)*f.w*.32), n=Math.ceil(f.w*f.h*.55/66/(m===4?1.6:1)); // ~half full by the end of the pour
+      for(let i=0;i<n;i++){const xx=x+((Math.random()*7)|0)-3,k=xx+(i&1)*f.w;if(xx>=0&&xx<f.w&&!f.grid[k])f.grid[k]=m;}}
+    fxStep(f,m===3&&p<2.8?(Math.sin(t*5)>0?1:-1):0,p>2.8);
+    fxPaint(f,now);
+  }
+};
+let fxLast=0;
+function fxLoop(now){
+  if(now-fxLast>33&&document.visibilityState==='visible'){fxLast=now;
+    for(const f of fxList){
+      if(!f.b.isConnected)continue;
+      if(f.w!==Math.max(8,Math.ceil(f.b.clientWidth/FXS))||!f.img)fxInit(f);
+      if(reduceMotion&&f.drawn)continue;
+      FX[f.kind](f,(now-f.t0)/1000,now); f.drawn=true;
+    }
+  }
+  requestAnimationFrame(fxLoop);
+}
+requestAnimationFrame(fxLoop);
 
 /* ---------- links: every view has its own address ---------- */
 // /projects/<id>/, /resume/, /sandbox/ and /simple/ each open straight to that view, and Back/Forward work.
@@ -234,7 +373,8 @@ addEventListener('keydown',e=>{
 
 /* ---------- left panel: sandbox / resume ---------- */
 const world=$('world'), cv=$('sand'), ctx=cv.getContext('2d');
-const CELL=4; let W=0,H=0,grid,col,mask,moved,VX,VY,img,grav=1,rainUntil=0,rainType=1,worldReady=false;
+const CELL=4; let W=0,H=0,grid,col,mask,moved,VX,VY,life,img,grav=1,rainUntil=0,rainType=1,worldReady=false;
+const gcv=$('glow'), gctx=gcv.getContext('2d'); let gimg, frame=0, wave=null;
 const view=()=>document.body.classList.contains('open')?document.body.dataset.view:null;
 let hideT;
 const settle=()=>setTimeout(()=>{if(stick)scr.scrollTop=scr.scrollHeight;},760); // after the fold animation
@@ -247,7 +387,7 @@ $('rproj').innerHTML=P.map(p=>`<div><div class="rrow"><b>${p.name}</b><span clas
 function setGrav(v){
   const was=grav; grav=v; world.classList.toggle('flipped',v<0);
   if(v===0&&was!==0&&worldReady) // particles keep a bit of their fall and start drifting, like the crates
-    for(let k=0;k<W*H;k++){const t=grid[k];if(!t||t===2||t===5)continue;
+    for(let k=0;k<W*H;k++){const t=grid[k];if(!t||STATIC[t])continue;
       VX[k]=(Math.random()-.5)*.5; VY[k]=was*(.1+Math.random()*.3)+(Math.random()-.5)*.3;}
 }
 function initWorld(restamp){
@@ -255,23 +395,27 @@ function initWorld(restamp){
   W=Math.ceil(r.width/CELL); H=Math.ceil(r.height/CELL);
   cv.width=W; cv.height=H;
   grid=new Uint8Array(W*H); col=new Uint8Array(W*H); mask=new Uint8Array(W*H); moved=new Uint8Array(W*H);
-  VX=new Float32Array(W*H); VY=new Float32Array(W*H);
-  img=ctx.createImageData(W,H); stamp();
+  VX=new Float32Array(W*H); VY=new Float32Array(W*H); life=new Uint8Array(W*H);
+  img=ctx.createImageData(W,H); gcv.width=W; gcv.height=H; gimg=gctx.createImageData(W,H); stamp();
   if(!worldReady||restamp)dropCrates(); worldReady=true;
 }
-function stamp(){
+// grid indices covered by the big "ODIN" letters
+function nameCells(){
   const o=document.createElement('canvas');o.width=W;o.height=H;const c=o.getContext('2d');
   let size=Math.min(H*.3,W*.3);c.font=`700 ${size}px Silkscreen, monospace`;
   const tw=c.measureText('ODIN').width; if(tw>W*.84){size*=W*.84/tw;c.font=`700 ${size}px Silkscreen, monospace`;}
   c.textAlign='center';c.textBaseline='middle';c.fillStyle='#fff';c.fillText('ODIN',W/2,H*.36);
-  const d=c.getImageData(0,0,W,H).data;
-  for(let k=0;k<W*H;k++)if(d[k*4+3]>120){grid[k]=2;col[k]=(Math.random()*3)|0;}
+  const d=c.getImageData(0,0,W,H).data, cells=[];
+  for(let k=0;k<W*H;k++)if(d[k*4+3]>120)cells.push(k);
+  return cells;
 }
+function stamp(){for(const k of nameCells()){grid[k]=2;col[k]=(Math.random()*3)|0;}}
 let rt; new ResizeObserver(()=>{clearTimeout(rt);rt=setTimeout(()=>{if(sandboxOpen()){const old=worldReady;initWorld(false);if(old){sizeCrates();clampCrates();}}},160);}).observe(world);
 // crates
 const crates=P.map(p=>{
   const el=document.createElement('div');el.className='crate';
-  el.innerHTML=`<div class="bar">${p.id}</div><div class="bd"><b>${p.name}</b><span>${p.year} · ${p.stack.split(',')[0]}</span></div>`;
+  el.innerHTML=`<div class="ci"><span class="cm">click me!</span><div class="bar">${p.id}</div><div class="bd"><b>${p.name}</b><span>${p.year} · ${p.stack.split(',')[0]}</span></div></div>`;
+  el.title=`Open ${p.name}`;
   $('crates').appendChild(el);
   const c={p,el,x:0,y:0,vx:0,vy:0,w:0,h:0,rot:0,drag:false};
   el.addEventListener('pointerdown',e=>{e.stopPropagation();el.setPointerCapture(e.pointerId);const r=world.getBoundingClientRect();
@@ -365,7 +509,7 @@ function rasterCrates(){
   for(const r of R)for(let y=r.y0;y<r.y1;y++)if(r.x1>r.x0)mask.fill(1,y*W+r.x0,y*W+r.x1);
   const dir=grav<0?1:-1;
   for(const r of R)for(let y=r.y0;y<r.y1;y++)for(let x=r.x0;x<r.x1;x++){
-    const k=y*W+x,t=grid[k]; if(!t||t===2||t===5)continue;
+    const k=y*W+x,t=grid[k]; if(!t||STATIC[t])continue;
     const c=col[k]; grid[k]=0;
     if(grav)shove(t,c,x,y,r,dir); else pushOut(t,c,x,y,r);
   }
@@ -380,7 +524,7 @@ function pushOut(t,c,x,y,r){
     let n=0,ok=false;
     for(let nx=sx,ny=sy;n<40;n++,nx+=dx,ny+=dy){
       if(!inX(nx)||ny<0||ny>=H)break;
-      const j=ny*W+nx,g=grid[j]; if(mask[j]||g===2||g===5)break;
+      const j=ny*W+nx,g=grid[j]; if(mask[j]||STATIC[g])break;
       if(!g){ok=true;break;}
     }
     if(!ok)continue;
@@ -398,22 +542,46 @@ function shove(t,c,x,y,r,dir){
     if(dir<0?yy<r.y0:yy>=r.y1){const j=row+x;if(!grid[j]&&!mask[j]){put(j,t,c);return;}}
     for(const s of [first,-first])
       for(let xx=s<0?r.x0-1:r.x1,m=0;xx>=0&&xx<W&&m<100;xx+=s,m++){
-        const j=row+xx; if(mask[j]||grid[j]===2||grid[j]===5)break;
+        const j=row+xx; if(mask[j]||STATIC[grid[j]])break;
         if(!grid[j]){put(j,t,c);return;}
       }
   }
 }
 const inX=x=>x>=0&&x<W;
-function swap(a,b){let t=grid[b];grid[b]=grid[a];grid[a]=t;t=col[b];col[b]=col[a];col[a]=t;
+function swap(a,b){let t=grid[b];grid[b]=grid[a];grid[a]=t;t=col[b];col[b]=col[a];col[a]=t;t=life[b];life[b]=life[a];life[a]=t;
   let v=VX[b];VX[b]=VX[a];VX[a]=v;v=VY[b];VY[b]=VY[a];VY[a]=v;moved[b]=1;}
-// lava melts sand and confetti; lava + water both flash into steam
+// lava melts sand and confetti, burns plants into smoke, and flashes water (and itself) into steam
 function react(x,y,k){
   for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){const nx=x+dx,ny=y+dy;if(!inX(nx)||ny<0||ny>=H)continue;
     const j=ny*W+nx,t=grid[j];
     if(t===3){grid[j]=6;grid[k]=6;moved[j]=moved[k]=1;return true;}
     if((t===1||t===7)&&Math.random()<.35)grid[j]=0;
+    if(t>=8&&t<=12&&Math.random()<.4)grid[j]=Math.random()<.5?6:0;
   }
   return false;
+}
+// Plants: a seed that lands on something solid becomes a stem with a set height (life). The tip grows against
+// gravity, wandering a little and dropping leaves; water next to it doubles the speed. At full height, or when
+// blocked, it blooms into a flower of one random color.
+function sprout(k){grid[k]=9;col[k]=(Math.random()*3)|0;life[k]=10+(Math.random()*28|0);}
+function grow(x,y,k){
+  const up=-grav, ny=y+up, l=life[k];
+  const wet=(inX(x-1)&&grid[k-1]===3)||(inX(x+1)&&grid[k+1]===3)||grid[k+W]===3||grid[k-W]===3;
+  if(Math.random()>(wet?.3:.14))return;
+  const r=Math.random(), nx=x+(r<.15?-1:r<.3?1:0), j=ny*W+nx;
+  if(l<=1||ny<0||ny>=H||!inX(nx)||(grid[j]&&grid[j]!==3)||mask[j]){life[k]=0;bloom(x,y);return;} // stems push up through water
+  grid[j]=9;col[j]=(Math.random()*3)|0;life[j]=l-1;life[k]=0;moved[j]=1;
+  if(Math.random()<.22){const s=Math.random()<.5?-1:1;if(inX(x+s)&&!grid[k+s]&&!mask[k+s]){grid[k+s]=11;col[k+s]=(Math.random()*2)|0;}}
+}
+function bloom(x,y){
+  const up=-grav, cy=y+up; if(cy<0||cy>=H)return;
+  const c=(Math.random()*PETALS.length)|0, ck=cy*W+x;
+  const open=j=>(!grid[j]||grid[j]===3)&&!mask[j];
+  if(open(ck)){grid[ck]=12;col[ck]=(Math.random()*2)|0;}
+  for(const [dx,dy] of [[1,0],[-1,0],[0,up],[1,up],[-1,up],[1,-up],[-1,-up]]){
+    const nx=x+dx, ny=cy+dy; if(!inX(nx)||ny<0||ny>=H)continue;
+    const j=ny*W+nx; if(open(j)){grid[j]=10;col[j]=c;}
+  }
 }
 function step(){
   moved.fill(0);
@@ -423,7 +591,9 @@ function step(){
     const ltr=Math.random()<.5,row=y*W,ny=y+grav,edge=ny<0||ny>=H,nrow=ny*W;
     for(let i=0;i<W;i++){
       const x=ltr?i:W-1-i,k=row+x,t=grid[k];
-      if(!t||t===2||t===5||moved[k])continue;
+      if(!t||moved[k])continue;
+      if(t===9){if(life[k])grow(x,y,k);continue;}
+      if(STATIC[t])continue;
       const d=Math.random()<.5?-1:1;
       if(t===6){ // steam rises against gravity, drifts, and fades
         if(Math.random()<.012){grid[k]=0;continue;}
@@ -437,12 +607,15 @@ function step(){
       }
       if(t===4){if(react(x,y,k))continue; if(Math.random()<.55)continue;}
       const b=nrow+x;
-      if(t===1||t===7){
-        if(edge)continue;
-        const ok=j=>!mask[j]&&(grid[j]===0||grid[j]===3||grid[j]===6);
-        if(ok(b)){swap(k,b);continue;}
-        if(inX(x+d)&&ok(b+d)){swap(k,b+d);continue;}
-        if(inX(x-d)&&ok(b-d))swap(k,b-d);
+      if(t===1||t===7||t===8){
+        if(!edge){
+          const ok=j=>!mask[j]&&(grid[j]===0||grid[j]===3||grid[j]===6);
+          if(ok(b)){swap(k,b);continue;}
+          if(inX(x+d)&&ok(b+d)){swap(k,b+d);continue;}
+          if(inX(x-d)&&ok(b-d)){swap(k,b-d);continue;}
+        }
+        // a seed that has come to rest on the floor, a crate or anything solid takes root
+        if(t===8&&(edge||mask[b]||(grid[b]&&grid[b]!==3&&grid[b]!==4&&grid[b]!==6)))sprout(k);
       }else{
         const ok=j=>!mask[j]&&!grid[j];
         if(!edge){
@@ -461,7 +634,7 @@ function floatStep(){
   const ltr=Math.random()<.5, ttb=Math.random()<.5;
   for(let yi=0;yi<H;yi++){const y=ttb?yi:H-1-yi;
     for(let i=0;i<W;i++){const x=ltr?i:W-1-i,k=y*W+x,t=grid[k];
-      if(!t||t===2||t===5||moved[k])continue;
+      if(!t||STATIC[t]||moved[k])continue;
       if(t===4&&react(x,y,k))continue;
       if(t===6&&Math.random()<.008){grid[k]=0;continue;}
       let vx=VX[k]*.999+(Math.random()-.5)*.03, vy=VY[k]*.999+(Math.random()-.5)*.03;
@@ -476,16 +649,56 @@ function floatStep(){
       if(sx&&sy){const jx=y*W+nx,jy=ny*W+x;
         if(!grid[jx]&&!mask[jx]){VY[k]=-vy*.5;swap(k,jx);continue;}
         if(!grid[jy]&&!mask[jy]){VX[k]=-vx*.5;swap(k,jy);continue;}}
-      const o=grid[j]; if(o&&o!==2&&o!==5){VX[j]=(VX[j]+vx)*.5;VY[j]=(VY[j]+vy)*.5;}
+      const o=grid[j]; if(o&&!STATIC[o]){VX[j]=(VX[j]+vx)*.5;VY[j]=(VY[j]+vy)*.5;}
       VX[k]=-vx*.5; VY[k]=-vy*.5;
     }
   }
 }
 function draw(){
-  const d=img.data;
+  const d=img.data, g=gimg.data; frame++;
   for(let k=0,n=W*H;k<n;k++){const t=grid[k],o=k*4;
+    if(t===4){ // lava shimmers through its colors and is copied to the glow layer
+      const c=PAL[4][(col[k]+((frame+k*7)>>4))%4];d[o]=c[0];d[o+1]=c[1];d[o+2]=c[2];d[o+3]=255;
+      g[o]=255;g[o+1]=110;g[o+2]=30;g[o+3]=210;continue;}
+    g[o+3]=0;
     if(t){const p=PAL[t],c=p[col[k]%p.length];d[o]=c[0];d[o+1]=c[1];d[o+2]=c[2];d[o+3]=255;}else d[o+3]=0;}
-  ctx.putImageData(img,0,0);
+  if(wave&&wave.stage===0)drawWave(d);
+  ctx.putImageData(img,0,0); gctx.putImageData(gimg,0,0);
+}
+// Reset as a tsunami: a wave rolls in from the left and washes away everything it passes, flinging the
+// crates; then the crates drop back in and the name re-forms grain by grain.
+function startTsunami(){setGrav(1);pouring=false;wave={t0:performance.now(),stage:0,front:-1,L:Math.max(30,Math.round(W*.35)),cleared:0,hit:new Set()};}
+function waveStep(now){
+  if(wave.stage===0){
+    const p=Math.min(1,(now-wave.t0)/1600), e=p*p*(3-2*p);
+    wave.front=-wave.L+(W+2*wave.L)*e;
+    const to=Math.min(W,Math.floor(wave.front));
+    for(let x=wave.cleared;x<to;x++)for(let y=0;y<H;y++)grid[y*W+x]=0;
+    wave.cleared=Math.max(wave.cleared,to);
+    for(const c of crates)if(!wave.hit.has(c)&&(c.x+c.w/2)/CELL<wave.front){
+      wave.hit.add(c);c.drag=false;c.vx+=16+Math.random()*10;c.vy-=8+Math.random()*8;}
+    if(p>=1){grid.fill(0);wave.stage=1;wave.t1=now;wave.cells=nameCells().sort(()=>Math.random()-.5);wave.done=0;dropCrates();}
+  }else{
+    const q=Math.min(1,(now-wave.t1)/800), n=Math.floor(wave.cells.length*q);
+    for(let i=wave.done;i<n;i++){const k=wave.cells[i];grid[k]=2;col[k]=(Math.random()*3)|0;}
+    wave.done=n; if(q>=1)wave=null;
+  }
+}
+function drawWave(d){
+  const f=wave.front, L=wave.L, peak=H*.72, FOAM=[235,245,255];
+  const put=(x,y,c)=>{if(x<0||x>=W||y<0||y>=H)return;const o=(y*W+x)*4;d[o]=c[0];d[o+1]=c[1];d[o+2]=c[2];d[o+3]=255;};
+  // body: steep face at the front, a tall flat-ish back, then a long tail
+  for(let x=Math.max(0,Math.floor(f-L));x<=Math.min(W-1,Math.floor(f));x++){
+    const u=(f-x)/L, s=u<.08?Math.pow(u/.08,.6):u<.55?1-(u-.08)*.25:.88*Math.pow(1-(u-.55)/.45,1.3);
+    const h=Math.round(s*peak+Math.sin(x*.35+frame*.25)*2), top=H-h;
+    for(let y=Math.max(0,top);y<H;y++)put(x,y,y<top+2||(f-x<1.5&&y<top+h*.5)?FOAM:PAL[3][(x+y+(frame>>1))%3]);
+  }
+  // breaking lip: the crest curls forward over the face and droops
+  const crest=Math.round(H-peak), fx=Math.floor(f);
+  for(let i=1;i<=Math.round(L*.18);i++){
+    const y0=crest+Math.round(i*i*.12);
+    for(let t=0;t<4;t++)put(fx+i,y0+t,t<2?FOAM:PAL[3][(i+t)%3]);
+  }
 }
 function crumbleAt(cx,cy,r){for(let y=cy-r;y<=cy+r;y++)for(let x=cx-r;x<=cx+r;x++){
   if(!inX(x)||y<0||y>=H||(x-cx)**2+(y-cy)**2>r*r)continue;const k=y*W+x;
@@ -494,11 +707,11 @@ function crumbleAll(){for(let k=0;k<W*H;k++)if(grid[k]===2){grid[k]=1;col[k]=(Ma
 function sweep(){for(let k=0;k<W*H;k++)if(grid[k]!==2)grid[k]=0;}
 function place(x,y,t){if(!inX(x)||y<0||y>=H)return;const k=y*W+x;
   if(t===0){if(grid[k]!==2&&grid[k]!==5)grid[k]=0;return;} // rock and the name can't be erased
-  if(!grid[k]&&!mask[k]){grid[k]=t;col[k]=(Math.random()*7)|0;
+  if(!grid[k]&&!mask[k]){grid[k]=t;col[k]=(Math.random()*7)|0;life[k]=0;
     if(grav){VX[k]=VY[k]=0;}else{VX[k]=(Math.random()-.5)*.6;VY[k]=(Math.random()-.5)*.6;}}}
 let pouring=false,pourType=1,px=0,py=0;
 world.addEventListener('contextmenu',e=>e.preventDefault());
-world.addEventListener('pointerdown',e=>{if(e.target.closest('.tbtn'))return;pouring=true;pourType=e.button===2?0:brush;
+world.addEventListener('pointerdown',e=>{if(e.target.closest('.tbtn')||wave)return;pouring=true;pourType=e.button===2?0:brush;
   const r=world.getBoundingClientRect();px=e.clientX-r.left;py=e.clientY-r.top;});
 addEventListener('pointerup',()=>pouring=false);
 world.addEventListener('pointermove',e=>{const r=world.getBoundingClientRect();px=e.clientX-r.left;py=e.clientY-r.top;
@@ -510,9 +723,10 @@ function loop(now){
   if(sandboxOpen()&&!worldReady&&ww>60&&ww===prevW)initWorld(false);
   prevW=ww;
   if(sandboxOpen()&&worldReady){
+    if(wave)waveStep(now);
     physics(k); rasterCrates();
-    if(pouring&&!crates.some(c=>c.drag)){const cx=(px/CELL)|0,cy=(py/CELL)|0,sp=pourType===5?5:9,hs=sp>>1;
-      for(let n=0;n<(pourType===0?40:pourType===5?25:10);n++)place(cx+((Math.random()*sp)|0)-hs,cy+((Math.random()*sp)|0)-hs,pourType);}
+    if(pouring&&!wave&&!crates.some(c=>c.drag)){const cx=(px/CELL)|0,cy=(py/CELL)|0,sp=pourType===5?5:9,hs=sp>>1;
+      for(let n=0;n<(pourType===0?40:pourType===5?25:pourType===8?2:10);n++)place(cx+((Math.random()*sp)|0)-hs,cy+((Math.random()*sp)|0)-hs,pourType);}
     if(now<rainUntil)for(let n=0;n<Math.max(4,W/12);n++){const x=(Math.random()*W)|0,y=grav<0?H-1:0;
       place(x,y,rainType);if(!grav&&grid[y*W+x])VY[y*W+x]=.7;}
     step(); draw();
